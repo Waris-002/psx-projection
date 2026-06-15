@@ -50,7 +50,7 @@ SECURITY_DICTIONARY = {
         "MUGHAL.KA": "Mughal Iron & Steel Industries Limited", "ASTL.KA": "Amreli Steels Limited",
         "AGHA.KA": "Agha Steel Industries Limited", "KSBP.KA": "KSB Pumps Company Limited",
         "ISL.KA": "International Steels Limited", "INIL.KA": "International Industries Limited",
-        "ASL.KA": "Aisha Steel Mills Limited", "ITTEFAQ.KA": "Ittefaq Iron Industries Limited",
+        "ASL.KA": "Aisha Steel Mills Mills Limited", "ITTEFAQ.KA": "Ittefaq Iron Industries Limited",
         "BOLAN.KA": "Bolan Castings Limited", "CRES.KA": "Crescent Steel & Investments Limited",
         "DOST.KA": "Dost Steels Limited"
     },
@@ -168,7 +168,6 @@ def compute_complete_market_matrix(days_span):
                         target_price_projection = latest_row['Close'] + (slope_current * days_span)
                         proj_display_string = f"🟢 Rs. {target_price_projection:.2f}" if slope_current >= 0 else f"🔴 Rs. {target_price_projection:.2f}"
                         
-                        # --- ADDED LOGIC CORE: ASSIGN SYSTEMIC FLOORS & CEILINGS ---
                         stop_loss_val = ema50 if ema20 > ema50 else (latest_row['Close'] * 0.93)
                         exit_cap_val = target_price_projection if slope_current > 0 else (latest_row['Close'] * 1.12)
                         
@@ -258,7 +257,6 @@ if not pool_df.empty and not master_returns_df.empty:
         
         with alpha_col1:
             st.markdown("### 🎯 Automatically Constructed Balanced Portfolio Matrix")
-            # DISPLAY UPDATE: Included 'Exit Cap (PKR)' in the interface pool
             display_cols = ["Allocation Mode", "Investment Allocation", "Ticker Symbol", "Company Name", "Price (PKR)", "Exit Floor (PKR)", "Exit Cap (PKR)", corr_col_title]
             
             def highlight_portfolio_style(val):
@@ -344,7 +342,7 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                         tracking_prob = 75.0 if ema20 > ema50 else 35.0
                         
                         slope_current, _ = np.polyfit(np.arange(forecast_days), comp_metrics['Close'].tail(forecast_days).values, 1)
-                        proj_display_string = f"🟢 Rs. {latest_row['Close'] + (slope_current * forecast_days):.2f}" if slope_current >= 0 else f"🔴 Rs. {latest_row['Close'] + (latest_row['Close'] + (slope_current * forecast_days)):.2f}"
+                        proj_display_string = f"🟢 Rs. {latest_row['Close'] + (slope_current * forecast_days):.2f}" if slope_current >= 0 else f"🔴 Rs. {latest_row['Close'] + (slope_current * forecast_days):.2f}"
                         
                         individual_company_records.append({
                             "Ticker Symbol": ticker.replace(".KA",""),
@@ -369,10 +367,28 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
             
             df = compute_technical_metrics(composite_df)
             if df is not None:
+                # Calculate Linear Vector Projection Points for the Sector Matrix
+                recent_data = df.tail(60)
+                slope, intercept = np.polyfit(np.arange(forecast_days), df['Close'].tail(forecast_days).values, 1)
+                
+                # Build extended date sequence index handles
+                last_date = recent_data.index[-1]
+                future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=forecast_days, freq='B')
+                future_y_values = [df['Close'].iloc[-1] + (slope * i) for i in range(1, forecast_days + 1)]
+                
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=df.tail(60).index, y=df.tail(60)['Close'], name='Sector Index Price', line=dict(color='#4b0082', width=3)))
-                fig.add_trace(go.Scatter(x=df.tail(60).index, y=df.tail(60)['EMA_20'], name='EMA 20 Support', line=dict(color='#ff7f0e', dash='dash')))
-                fig.add_trace(go.Scatter(x=df.tail(60).index, y=df.tail(60)['EMA_50'], name='EMA 50 Baseline', line=dict(color='#2ca02c', dash='dash')))
+                fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['Close'], name='Sector Index Price', line=dict(color='#4b0082', width=3)))
+                fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#ff7f0e', dash='dash')))
+                fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#2ca02c', dash='dash')))
+                
+                # --- FIX 1: ADD DOTTED FORECAST PROJECTION TRACE ---
+                fig.add_trace(go.Scatter(
+                    x=[recent_data.index[-1]] + list(future_dates),
+                    y=[recent_data['Close'].iloc[-1]] + future_y_values,
+                    name=f'{forecast_days}-Day Predictive Slope Vector',
+                    line=dict(color='#00bfff', width=2.5, dash='dot')
+                ))
+                
                 st.plotly_chart(fig, use_container_width=True)
                 
                 latest_idx_row = df.iloc[-1]
@@ -399,3 +415,50 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                     use_container_width=True, 
                     hide_index=True
                 )
+                
+    # --- FIX 2: ADD THE EXPLICIT ELSE BRANCH FOR INDIVIDUAL STOCKS ---
+    else:
+        target_ticker = selected_company_formatted.split(" | ")[0]
+        st.subheader(f"📊 Targeted Security Technical Analysis Matrix: {ticker_mapping[target_ticker]}")
+        
+        try:
+            t_obj = yf.Ticker(target_ticker)
+            df_raw = t_obj.history(period="1y")
+            
+            if not df_raw.empty and len(df_raw) >= 50:
+                df = compute_technical_metrics(df_raw)
+                if df is not None:
+                    recent_data = df.tail(60)
+                    
+                    # Compute Trend Line Vectors for Dotted Forecast
+                    slope, _ = np.polyfit(np.arange(forecast_days), df['Close'].tail(forecast_days).values, 1)
+                    last_date = recent_data.index[-1]
+                    future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=forecast_days, freq='B')
+                    future_y_values = [df['Close'].iloc[-1] + (slope * i) for i in range(1, forecast_days + 1)]
+                    
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['Close'], name='Stock Price (PKR)', line=dict(color='#004085', width=3)))
+                    fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#ff7f0e', dash='dash')))
+                    fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#2ca02c', dash='dash')))
+                    
+                    # Add predictive line segment
+                    fig.add_trace(go.Scatter(
+                        x=[recent_data.index[-1]] + list(future_dates),
+                        y=[recent_data['Close'].iloc[-1]] + future_y_values,
+                        name=f'{forecast_days}-Day Predictive Vector',
+                        line=dict(color='#00bfff', width=2.5, dash='dot')
+                    ))
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    latest_row = df.iloc[-1]
+                    action_rec = "🟢 BULLISH CONTINUATION" if latest_row['EMA_20'] > latest_row['EMA_50'] else "🔴 STRUCTURAL DOWNTREND"
+                    
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Last Price", f"Rs. {latest_row['Close']:.2f}")
+                    col2.metric("RSI (14)", f"{latest_row['RSI']:.1f}")
+                    col3.metric("Systemic Bias Call", action_rec)
+            else:
+                st.error("Insufficient parallel data packet arrays available for this asset ticker symbol.")
+        except Exception as e:
+            st.error(f"Data Engine Error processing target connection frame: {str(e)}")
