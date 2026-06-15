@@ -183,7 +183,8 @@ def compute_complete_market_matrix(days_span):
             except: 
                 pass
             
-        cap_pct of_psx = (sector_cap_accumulator / TOTAL_ESTIMATED_PSX_CAP) * 100
+        # FIX: Replaced syntax error space with underscore
+        cap_pct_of_psx = (sector_cap_accumulator / TOTAL_ESTIMATED_PSX_CAP) * 100
         bias_pct = (bullish_count / total_valid) * 100 if total_valid > 0 else 0.0
         bias = "BULLISH" if bias_pct >= 40.0 else "BEARISH"
         
@@ -387,6 +388,7 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                     if "🟢" in str(val): return 'background-color: #d4edda; font-weight: bold; color: #155724;'
                     return ''
                 
+                # FIX: Switched from .applymap() to .map() to match current environment versions
                 st.dataframe(
                     rec_df.style.map(highlight_matrix_cells, subset=['Integrated Strategy Score', proj_col_name]), 
                     use_container_width=True, 
