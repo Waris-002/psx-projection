@@ -274,11 +274,12 @@ if not pool_df.empty and not master_returns_df.empty:
         with alpha_col2:
             st.markdown("### 📊 Internal Portfolio Covariance Structure Matrix")
             
+            # Replaced background_gradient tool to avoid uninstalled matplotlib dependency errors entirely
             def color_cells_manually(val):
-                if val == 1.0: return 'background-color: #fce4d6; font-weight: bold;'
-                elif val < 0: return 'background-color: #e2efda; color: #375623;'
-                elif val > 0.5: return 'background-color: #fff2cc;'
-                return ''
+                if val == 1.0: return 'background-color: #fce4d6; font-weight: bold; color: #000000;'
+                elif val < 0: return 'background-color: #e2efda; color: #375623; font-weight: bold;'
+                elif val > 0.5: return 'background-color: #fff2cc; color: #7f6000;'
+                return 'color: #000000;'
 
             st.dataframe(
                 sub_matrix.style.map(color_cells_manually).format(precision=2),
@@ -367,23 +368,30 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
             if df_index is not None:
                 recent_data = df_index.tail(60)
                 slope, intercept = np.polyfit(np.arange(forecast_days), df_index['Close'].tail(forecast_days).values, 1)
-                last_date = recent_data.index[-1]
                 
-                # --- FIXED TIMELINE ENGINE FOR COMPOSITE PATHWAY ---
-                # Forecast begins on the next business day relative to the actual historical data tail
-                start_projection_date = last_date + pd.Timedelta(days=1)
-                future_dates = pd.date_range(start=start_projection_date, periods=forecast_days, freq='B')
-                future_y_values = [df_index['Close'].iloc[-1] + (slope * i) for i in range(1, forecast_days + 1)]
+                # --- DYNAMIC HISTORICAL DATA PACKET ANCHOR (COMPOSITE) ---
+                last_available_session = recent_data.index[-1]
+                last_available_close = recent_data['Close'].iloc[-1]
+                
+                # Dynamic Intercept Walk: Generate forward business days ignoring weekends entirely
+                future_dates = []
+                current_date_pointer = last_available_session
+                while len(future_dates) < forecast_days:
+                    current_date_pointer += pd.Timedelta(days=1)
+                    if current_date_pointer.weekday() < 5:  # Natively strips out Saturdays & Sundays
+                        future_dates.append(current_date_pointer)
+                        
+                future_y_values = [last_available_close + (slope * (i + 1)) for i in range(forecast_days)]
                 
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['Close'], name='Sector Index Price', line=dict(color='#4b0082', width=3)))
                 fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#ff7f0e', dash='dash')))
                 fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#2ca02c', dash='dash')))
                 
-                # Connect seamlessly by including last historical element at index 0 of predictive path
+                # Seamless vector stitch: Index [0] is explicitly the last active candle day inside the data packet
                 fig.add_trace(go.Scatter(
-                    x=[last_date] + list(future_dates),
-                    y=[recent_data['Close'].iloc[-1]] + future_y_values,
+                    x=[last_available_session] + list(future_dates),
+                    y=[last_available_close] + future_y_values,
                     name=f'{forecast_days}-Day Predictive Slope Vector',
                     line=dict(color='#00bfff', width=2.5, dash='dot')
                 ))
@@ -429,23 +437,30 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                 if df_stock is not None:
                     recent_data = df_stock.tail(60)
                     slope, _ = np.polyfit(np.arange(forecast_days), df_stock['Close'].tail(forecast_days).values, 1)
-                    last_date = recent_data.index[-1]
                     
-                    # --- FIXED TIMELINE ENGINE FOR INDIVIDUAL PATHWAY ---
-                    # The projection calculation anchors cleanly to the last traded day from the yfinance array
-                    start_projection_date = last_date + pd.Timedelta(days=1)
-                    future_dates = pd.date_range(start=start_projection_date, periods=forecast_days, freq='B')
-                    future_y_values = [df_stock['Close'].iloc[-1] + (slope * i) for i in range(1, forecast_days + 1)]
+                    # --- DYNAMIC HISTORICAL DATA PACKET ANCHOR (INDIVIDUAL TICKER) ---
+                    last_available_session = recent_data.index[-1]
+                    last_available_close = recent_data['Close'].iloc[-1]
+                    
+                    # Dynamic Intercept Walk: Generate forward business days ignoring weekends entirely
+                    future_dates = []
+                    current_date_pointer = last_available_session
+                    while len(future_dates) < forecast_days:
+                        current_date_pointer += pd.Timedelta(days=1)
+                        if current_date_pointer.weekday() < 5:  # Natively strips out Saturdays & Sundays
+                            future_dates.append(current_date_pointer)
+                            
+                    future_y_values = [last_available_close + (slope * (i + 1)) for i in range(forecast_days)]
                     
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['Close'], name='Stock Price (PKR)', line=dict(color='#004085', width=3)))
                     fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#ff7f0e', dash='dash')))
                     fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#2ca02c', dash='dash')))
                     
-                    # Eliminates timeline gaps completely by connecting the solid line explicitly to the first dot
+                    # Seamless vector stitch: Index [0] matches the hard line terminal coordinates, completely removing structural timeline disconnects
                     fig.add_trace(go.Scatter(
-                        x=[last_date] + list(future_dates),
-                        y=[recent_data['Close'].iloc[-1]] + future_y_values,
+                        x=[last_available_session] + list(future_dates),
+                        y=[last_available_close] + future_y_values,
                         name=f'{forecast_days}-Day Predictive Vector',
                         line=dict(color='#00bfff', width=2.5, dash='dot')
                     ))
