@@ -310,6 +310,28 @@ for row_idx in range(0, len(sorted_heatmap_keys), 4):
 
 st.markdown("---")
 
+# Define a helper for the CSS-based heatmap visuals
+def render_sector_card(sect, data):
+    bias_color = "#28a745" if data["bias"] == "BULLISH" else "#dc3545"
+    bg_color = "#d4edda" if data["bias"] == "BULLISH" else "#f8d7da"
+    label = "🟢 BULLISH STRUCTURE" if data["bias"] == "BULLISH" else "🔴 RISK/CONSOLIDATION"
+    
+    vol_display = f"{data['volume_pkr'] / 1e6:.1f}M" if data['volume_pkr'] < 1e9 else f"{data['volume_pkr'] / 1e9:.2f}B"
+    
+    return f"""
+    <div style="background-color:{bg_color}; border-left:6px solid {bias_color}; padding:15px; border-radius:5px; height:130px; margin-bottom:15px;">
+        <b style="color:#333; font-size:14px;">{sect}</b><br>
+        <span style="color:{bias_color}; font-size:11px; font-weight:bold;">{label}</span><br>
+        <small style="color:#555;">Weight: {data['cap_pct']}%<br>Vol: Rs. {vol_display}</small>
+    </div>
+    """
+# Render in grid
+for row_idx in range(0, len(sorted_heatmap_keys), 4):
+    cols = st.columns(4)
+    for i, sect in enumerate(sorted_heatmap_keys[row_idx:row_idx + 4]):
+        data = heatmap_stats.get(sect, {"bias": "BEARISH", "cap_pct": 0.0, "volume_pkr": 0.0})
+        cols[i].markdown(render_sector_card(sect, data), unsafe_allow_html=True)
+
 # --- CORE QUANT ENGINE ---
 if st.sidebar.button("Execute Quantitative Processing Engine"):
     
