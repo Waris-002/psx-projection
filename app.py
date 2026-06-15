@@ -147,6 +147,11 @@ def compute_complete_market_matrix(days_span):
             try:
                 t_obj = yf.Ticker(ticker)
                 hist = t_obj.history(period="1y") 
+                
+                # Fetch Real-Time Price
+                info = t_obj.info
+                real_time_price = info.get('currentPrice') or info.get('regularMarketPrice') or hist['Close'].iloc[-1]
+                
                 if not hist.empty and len(hist) >= 60:
                     recent_window = hist.tail(days_span)
                     traded_value_pkr = (recent_window['Close'] * recent_window['Volume']).sum()
@@ -165,17 +170,17 @@ def compute_complete_market_matrix(days_span):
                         tracking_prob = 75.0 if ema20 > ema50 else 35.0
                         
                         slope_current, _ = np.polyfit(np.arange(days_span), comp_metrics['Close'].tail(days_span).values, 1)
-                        target_price_projection = latest_row['Close'] + (slope_current * days_span)
+                        target_price_projection = real_time_price + (slope_current * days_span)
                         proj_display_string = f"🟢 Rs. {target_price_projection:.2f}" if slope_current >= 0 else f"🔴 Rs. {target_price_projection:.2f}"
                         
-                        stop_loss_val = ema50 if ema20 > ema50 else (latest_row['Close'] * 0.93)
-                        exit_cap_val = target_price_projection if slope_current > 0 else (latest_row['Close'] * 1.12)
+                        stop_loss_val = ema50 if ema20 > ema50 else (real_time_price * 0.93)
+                        exit_cap_val = target_price_projection if slope_current > 0 else (real_time_price * 1.12)
                         
                         all_companies_flat_list.append({
                             "Ticker Symbol": symbol_short,
                             "Company Name": companies[ticker],
                             "Sector": sect,
-                            "Price (PKR)": round(latest_row['Close'], 2),
+                            "Price (PKR)": round(real_time_price, 2),
                             "Score Value": tracking_prob,
                             "Integrated Score": "🟢 BULLISH" if tracking_prob >= 55.0 else "🔴 BEARISH/RISK",
                             f"{days_span}-Day Projection": proj_display_string,
@@ -274,7 +279,6 @@ if not pool_df.empty and not master_returns_df.empty:
         with alpha_col2:
             st.markdown("### 📊 Internal Portfolio Covariance Structure Matrix")
             
-            # Replaced background_gradient tool to avoid uninstalled matplotlib dependency errors entirely
             def color_cells_manually(val):
                 if val == 1.0: return 'background-color: #fce4d6; font-weight: bold; color: #000000;'
                 elif val < 0: return 'background-color: #e2efda; color: #375623; font-weight: bold;'
@@ -324,6 +328,9 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
             try:
                 t_obj = yf.Ticker(ticker)
                 raw_df = t_obj.history(period="1y")
+                info = t_obj.info
+                real_time_price = info.get('currentPrice') or info.get('regularMarketPrice') or raw_df['Close'].iloc[-1]
+                
                 if not raw_df.empty and len(raw_df) > 35:
                     weight_factor = CAP_WEIGHT_UNITS.get(ticker, 10.0)
                     normalized_indexed_series = (raw_df['Close'] / raw_df['Close'].iloc[0]) * 100
@@ -341,12 +348,12 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                         tracking_prob = 75.0 if ema20 > ema50 else 35.0
                         
                         slope_current, _ = np.polyfit(np.arange(forecast_days), comp_metrics['Close'].tail(forecast_days).values, 1)
-                        proj_display_string = f"🟢 Rs. {latest_row['Close'] + (slope_current * forecast_days):.2f}" if slope_current >= 0 else f"🔴 Rs. {latest_row['Close'] + (slope_current * forecast_days):.2f}"
+                        proj_display_string = f"🟢 Rs. {real_time_price + (slope_current * forecast_days):.2f}" if slope_current >= 0 else f"🔴 Rs. {real_time_price + (slope_current * forecast_days):.2f}"
                         
                         individual_company_records.append({
                             "Ticker Symbol": ticker.replace(".KA",""),
                             "Corporate Legal Name": ticker_mapping[ticker],
-                            "Last Traded Price (PKR)": round(latest_row['Close'], 2),
+                            "Last Traded Price (PKR)": round(real_time_price, 2),
                             "Momentum Index (RSI)": round(latest_row['RSI'], 2),
                             "Trend Alignment Floor": "Above Support" if ema20 > ema50 else "Below Base",
                             "Integrated Strategy Score": "🟢 BULLISH" if tracking_prob >= 55.0 else "🔴 BEARISH/RISK",
@@ -373,12 +380,11 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                 last_available_session = recent_data.index[-1]
                 last_available_close = recent_data['Close'].iloc[-1]
                 
-                # Dynamic Intercept Walk: Generate forward business days ignoring weekends entirely
                 future_dates = []
                 current_date_pointer = last_available_session
                 while len(future_dates) < forecast_days:
                     current_date_pointer += pd.Timedelta(days=1)
-                    if current_date_pointer.weekday() < 5:  # Natively strips out Saturdays & Sundays
+                    if current_date_pointer.weekday() < 5: 
                         future_dates.append(current_date_pointer)
                         
                 future_y_values = [last_available_close + (slope * (i + 1)) for i in range(forecast_days)]
@@ -388,7 +394,6 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                 fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#ff7f0e', dash='dash')))
                 fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#2ca02c', dash='dash')))
                 
-                # Seamless vector stitch: Index [0] is explicitly the last active candle day inside the data packet
                 fig.add_trace(go.Scatter(
                     x=[last_available_session] + list(future_dates),
                     y=[last_available_close] + future_y_values,
@@ -431,6 +436,8 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
         try:
             t_obj = yf.Ticker(target_ticker)
             df_raw = t_obj.history(period="1y")
+            info = t_obj.info
+            real_time_price = info.get('currentPrice') or info.get('regularMarketPrice') or df_raw['Close'].iloc[-1]
             
             if not df_raw.empty and len(df_raw) >= 50:
                 df_stock = compute_technical_metrics(df_raw)
@@ -438,29 +445,25 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                     recent_data = df_stock.tail(60)
                     slope, _ = np.polyfit(np.arange(forecast_days), df_stock['Close'].tail(forecast_days).values, 1)
                     
-                    # --- DYNAMIC HISTORICAL DATA PACKET ANCHOR (INDIVIDUAL TICKER) ---
                     last_available_session = recent_data.index[-1]
-                    last_available_close = recent_data['Close'].iloc[-1]
                     
-                    # Dynamic Intercept Walk: Generate forward business days ignoring weekends entirely
                     future_dates = []
                     current_date_pointer = last_available_session
                     while len(future_dates) < forecast_days:
                         current_date_pointer += pd.Timedelta(days=1)
-                        if current_date_pointer.weekday() < 5:  # Natively strips out Saturdays & Sundays
+                        if current_date_pointer.weekday() < 5: 
                             future_dates.append(current_date_pointer)
                             
-                    future_y_values = [last_available_close + (slope * (i + 1)) for i in range(forecast_days)]
+                    future_y_values = [real_time_price + (slope * (i + 1)) for i in range(forecast_days)]
                     
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['Close'], name='Stock Price (PKR)', line=dict(color='#004085', width=3)))
                     fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#ff7f0e', dash='dash')))
                     fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#2ca02c', dash='dash')))
                     
-                    # Seamless vector stitch: Index [0] matches the hard line terminal coordinates, completely removing structural timeline disconnects
                     fig.add_trace(go.Scatter(
                         x=[last_available_session] + list(future_dates),
-                        y=[last_available_close] + future_y_values,
+                        y=[real_time_price] + future_y_values,
                         name=f'{forecast_days}-Day Predictive Vector',
                         line=dict(color='#00bfff', width=2.5, dash='dot')
                     ))
@@ -471,7 +474,7 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                     action_rec = "🟢 BULLISH CONTINUATION" if latest_row['EMA_20'] > latest_row['EMA_50'] else "🔴 STRUCTURAL DOWNTREND"
                     
                     col1, col2, col3 = st.columns(3)
-                    col1.metric("Last Price", f"Rs. {latest_row['Close']:.2f}")
+                    col1.metric("Last Price", f"Rs. {real_time_price:.2f}")
                     col2.metric("RSI (14)", f"{latest_row['RSI']:.1f}")
                     col3.metric("Systemic Bias Call", action_rec)
             else:
