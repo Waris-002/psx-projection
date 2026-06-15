@@ -356,7 +356,7 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                     return ''
                     
                 st.dataframe(
-                    rec_df.style.applymap(highlight_matrix_cells, subset=['Integrated Strategy Score', f"{forecast_days}-Day Projected Vector Price"]), 
+                    rec_df.style.map(highlight_matrix_cells, subset=['Integrated Strategy Score', f"{forecast_days}-Day Projected Vector Price"]), 
                     use_container_width=True, 
                     hide_index=True
                 )
