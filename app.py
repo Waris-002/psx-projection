@@ -84,7 +84,6 @@ SECURITY_DICTIONARY = {
     }
 }
 
-# Estimated weights mapped for sector weight composite configurations
 CAP_WEIGHT_UNITS = {
     "UBL.KA": 420.0, "MEBL.KA": 380.0, "MCB.KA": 310.0, "HBL.KA": 180.0, "BAHL.KA": 160.0, "BAFL.KA": 140.0, "NBP.KA": 150.0, "FABL.KA": 75.0, "ABL.KA": 110.0, "BOP.KA": 25.0, "AKBL.KA": 35.0, "JSBL.KA": 15.0, "SBL.KA": 12.0, "SNBL.KA": 18.0, "BIPL.KA": 22.0,
     "SYS.KA": 140.0, "TRG.KA": 45.0, "AIRLINK.KA": 35.0, "NETSOL.KA": 12.0, "AVN.KA": 15.0, "OCTOPUS.KA": 8.0, "TELE.KA": 4.0, "WTL.KA": 12.0, "PTC.KA": 28.0,
@@ -185,13 +184,12 @@ else:
 
 forecast_days = st.sidebar.slider("Interactive Plot Display Forecast Path (Days):", min_value=5, max_value=30, value=15)
 
-# --- SECTOR HEATMAP ENGINE ---
-st.markdown("### 🗺️ Systemic Sector Structural Trend Heatmap")
-st.markdown(f"*Dynamic analytics sorted from **maximum to minimum traded volume** for exactly the last **{forecast_days} trading days**.*")
-
-@st.cache_data(ttl=120)  # Upped TTL to 120s due to larger computational matrix processing
-def compute_heatmap_and_volume_data(days_span):
+# --- GLOBAL ENGINE DATA PRE-CALCULATION ---
+@st.cache_data(ttl=120)
+def compute_complete_market_matrix(days_span):
     diagnostics = {}
+    all_companies_flat_list = []
+    
     for sect in sector_keys:
         companies = SECURITY_DICTIONARY[sect]
         bullish_count, total_valid = 0, 0
@@ -209,41 +207,117 @@ def compute_heatmap_and_volume_data(days_span):
                     traded_value_pkr = (recent_window['Close'] * recent_window['Volume']).sum()
                     total_volume_pkr_accumulator += traded_value_pkr
                     
-                    if len(hist) >= 50:
-                        ema20 = EMAIndicator(close=hist['Close'], window=20).ema_indicator().iloc[-1]
-                        ema50 = EMAIndicator(close=hist['Close'], window=50).ema_indicator().iloc[-1]
-                        if ema20 > ema50: 
-                            bullish_count += 1
-                    else:
-                        if hist['Close'].iloc[-1] > hist['Close'].iloc[-max(5, days_span)]:
-                            bullish_count += 1
+                    comp_metrics = compute_technical_metrics(hist)
+                    if comp_metrics is not None:
+                        latest_row = comp_metrics.iloc[-1]
+                        _, tracking_prob = generate_multi_horizon_signal(comp_metrics)
+                        
+                        slope_current, _ = np.polyfit(np.arange(days_span), comp_metrics['Close'].tail(days_span).values, 1)
+                        target_price_projection = latest_row['Close'] + (slope_current * days_span)
+                        proj_display_string = f"🟢 Rs. {target_price_projection:.2f}" if slope_current >= 0 else f"🔴 Rs. {target_price_projection:.2f}"
+                        
+                        all_companies_flat_list.append({
+                            "Ticker Symbol": ticker.replace(".KA",""),
+                            "Company Name": companies[ticker],
+                            "Sector": sect,
+                            "Price (PKR)": round(latest_row['Close'], 2),
+                            "RSI (14)": round(latest_row['RSI'], 2),
+                            "Score Value": tracking_prob,
+                            "Integrated Score": "🟢 BULLISH" if tracking_prob >= 55.0 else "🔴 BEARISH/RISK",
+                            f"{days_span}-Day Projection": proj_display_string,
+                            "_volume_raw": traded_value_pkr
+                        })
+                        
+                        if len(hist) >= 50:
+                            ema20 = comp_metrics['EMA_20'].iloc[-1]
+                            ema50 = comp_metrics['EMA_50'].iloc[-1]
+                            if ema20 > ema50: bullish_count += 1
+                        else:
+                            if hist['Close'].iloc[-1] > hist['Close'].iloc[-max(5, days_span)]: bullish_count += 1
                     total_valid += 1
             except: 
                 pass
             
         cap_pct_of_psx = (sector_cap_accumulator / TOTAL_ESTIMATED_PSX_CAP) * 100
-        bias = "BULLISH" if (total_valid > 0 and (bullish_count / total_valid) >= 0.4) else "BEARISH"
+        bias_pct = (bullish_count / total_valid) * 100 if total_valid > 0 else 0.0
+        bias = "BULLISH" if bias_pct >= 40.0 else "BEARISH"
         
         diagnostics[sect] = {
             "bias": bias,
+            "bias_score": round(bias_pct, 1),
             "cap_pct": round(cap_pct_of_psx, 2),
             "volume_pkr": total_volume_pkr_accumulator
         }
-    return diagnostics
+    return diagnostics, all_companies_flat_list
 
-with st.spinner("Processing deep matrix timeline arrays across 94 securities..."):
-    heatmap_stats = compute_heatmap_and_volume_data(forecast_days)
+with st.spinner("Processing structural matrix timeline across all 94 securities..."):
+    heatmap_stats, complete_companies_pool = compute_complete_market_matrix(forecast_days)
 
-sorted_sector_keys = sorted(sector_keys, key=lambda s: heatmap_stats.get(s, {}).get("volume_pkr", 0.0), reverse=True)
+# --- TOP SUGGESTIONS ALPHA ENGINE (DISPLAYED AT TOP) ---
+st.markdown("## ⚡ Alpha Allocation Dashboard (Top High-Conviction Plays)")
 
-for row_idx in range(0, len(sorted_sector_keys), 4):
-    row_sectors = sorted_sector_keys[row_idx:row_idx + 4]
+# Alpha ranking math: Sort sectors by trend health percentage, using volume to break ties
+sorted_alpha_sectors = sorted(sector_keys, key=lambda s: (heatmap_stats.get(s, {}).get("bias_score", 0.0), heatmap_stats.get(s, {}).get("volume_pkr", 0.0)), reverse=True)
+top_3_sectors = sorted_alpha_sectors[:3]
+
+suggested_sectors_data = []
+for idx, s_name in enumerate(top_3_sectors):
+    s_stats = heatmap_stats[s_name]
+    vol_m_b = f"Rs. {s_stats['volume_pkr'] / 1e9:.2f}B" if s_stats['volume_pkr'] >= 1e9 else f"Rs. {s_stats['volume_pkr'] / 1e6:.1f}M"
+    suggested_sectors_data.append({
+        "Rank Allocation": f"🏅 Top Choice {idx+1}",
+        "Target Market Sector": s_name,
+        "Structural Trend Health": f"🟢 {s_stats['bias_score']}% Bullish Confluence",
+        "Total Horizon Traded Liquidity": vol_m_b,
+        "Sector Weight Index": f"{s_stats['cap_pct']}%"
+    })
+
+top_sectors_df = pd.DataFrame(suggested_sectors_data)
+
+alpha_col1, alpha_col2 = st.columns([4, 5])
+
+with alpha_col1:
+    st.markdown("### 🏆 Top 3 Sector Allocations")
+    st.dataframe(top_sectors_df, use_container_width=True, hide_index=True)
+
+with alpha_col2:
+    st.markdown("### 🎯 Top 5 Highest-Conviction Alpha Companies")
+    # Filter the giant pool for firms belonging ONLY to the top 3 sectors, then sort by highest tracking score value
+    pool_df = pd.DataFrame(complete_companies_pool)
+    if not pool_df.empty:
+        filtered_top_firms = pool_df[pool_df['Sector'].isin(top_3_sectors)]
+        filtered_top_firms = filtered_top_firms.sort_values(by="Score Value", ascending=False).head(5)
+        
+        display_top_firms = filtered_top_firms[["Ticker Symbol", "Company Name", "Sector", "Price (PKR)", "Integrated Score", f"{forecast_days}-Day Projection"]]
+        
+        def highlight_alpha_cells(val):
+            if "🟢" in str(val): return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+            elif "🔴" in str(val): return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
+            return ''
+            
+        st.dataframe(
+            display_top_firms.style.map(highlight_alpha_cells, subset=['Integrated Score', f"{forecast_days}-Day Projection"]),
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        st.info("Insufficient timeline tracking volume array to compile macro asset lists.")
+
+st.markdown("---")
+
+# --- SECTOR HEATMAP ENGINE ---
+st.markdown("### 🗺️ Systemic Sector Structural Trend Heatmap")
+st.markdown(f"*Dynamic analytics sorted from **maximum to minimum traded volume** for exactly the last **{forecast_days} trading days**.*")
+
+sorted_heatmap_keys = sorted(sector_keys, key=lambda s: heatmap_stats.get(s, {}).get("volume_pkr", 0.0), reverse=True)
+
+for row_idx in range(0, len(sorted_heatmap_keys), 4):
+    row_sectors = sorted_heatmap_keys[row_idx:row_idx + 4]
     columns_track = st.columns(4)
     
     for i, sect in enumerate(row_sectors):
         col_slot = columns_track[i]
         data_bundle = heatmap_stats.get(sect, {"bias": "BEARISH", "cap_pct": 1.5, "volume_pkr": 0.0})
-        
         volume_display = f"{data_bundle['volume_pkr'] / 1e6:.1f}M" if data_bundle['volume_pkr'] < 1e9 else f"{data_bundle['volume_pkr'] / 1e9:.2f}B"
         
         if data_bundle["bias"] == "BULLISH":
@@ -304,12 +378,10 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                     comp_metrics = compute_technical_metrics(raw_df)
                     if comp_metrics is not None:
                         latest_row = comp_metrics.iloc[-1]
-                        
                         _, tracking_prob = generate_multi_horizon_signal(comp_metrics)
                         
                         slope_current, _ = np.polyfit(np.arange(forecast_days), comp_metrics['Close'].tail(forecast_days).values, 1)
                         target_price_projection = latest_row['Close'] + (slope_current * forecast_days)
-                        
                         proj_display_string = f"🟢 Rs. {target_price_projection:.2f}" if slope_current >= 0 else f"🔴 Rs. {target_price_projection:.2f}"
                         
                         individual_company_records.append({
@@ -372,10 +444,8 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                 rec_df = rec_df.sort_values(by="_sort_vol", ascending=False).drop(columns=["_sort_vol"])
                 
                 def highlight_matrix_cells(val):
-                    if "🟢" in str(val): 
-                        return 'background-color: #d4edda; color: #155724; font-weight: bold;'
-                    elif "🔴" in str(val): 
-                        return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
+                    if "🟢" in str(val): return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                    elif "🔴" in str(val): return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
                     return ''
                     
                 st.dataframe(
