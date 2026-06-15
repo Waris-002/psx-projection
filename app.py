@@ -203,7 +203,7 @@ def compute_complete_market_matrix(days_span):
 with st.spinner("Processing structural trend tracking matrix..."):
     heatmap_stats, complete_companies_pool, master_returns_df = compute_complete_market_matrix(forecast_days)
 
-# --- ⚡ CROSS-ASSET PORTFOLIO VARIANCE HEDGE ENGINE ---
+# --- CROSS-ASSET PORTFOLIO VARIANCE HEDGE ENGINE ---
 st.markdown("## ⚡ Cross-Asset Portfolio Variance Engine (Dynamic Net-Off)")
 
 pool_df = pd.DataFrame(complete_companies_pool)
@@ -274,12 +274,12 @@ if not pool_df.empty and not master_returns_df.empty:
         with alpha_col2:
             st.markdown("### 📊 Internal Portfolio Covariance Structure Matrix")
             
-            # Formatted style layout directly avoids using .background_gradient to drop matplotlib dependencies entirely
+            # Replaced background_gradient tool to avoid uninstalled matplotlib dependency errors entirely
             def color_cells_manually(val):
-                if val == 1.0: return 'background-color: #fce4d6; font-weight: bold;'
-                elif val < 0: return 'background-color: #e2efda; color: #375623;'
-                elif val > 0.5: return 'background-color: #fff2cc;'
-                return ''
+                if val == 1.0: return 'background-color: #fce4d6; font-weight: bold; color: #000000;'
+                elif val < 0: return 'background-color: #e2efda; color: #375623; font-weight: bold;'
+                elif val > 0.5: return 'background-color: #fff2cc; color: #7f6000;'
+                return 'color: #000000;'
 
             st.dataframe(
                 sub_matrix.style.map(color_cells_manually).format(precision=2),
@@ -309,28 +309,6 @@ for row_idx in range(0, len(sorted_heatmap_keys), 4):
             col_slot.markdown(f"""<div style="background-color:#f8d7da; border-left:6px solid #dc3545; padding:14px; border-radius:4px; min-height:140px; margin-bottom:20px;"><b style="color:#721c24; font-size:14px;">{sect}</b><br><span style="color:#dc3545; font-size:11px; font-weight:bold;">🔴 RISK/CONSOLIDATION</span><br><small style="color:#555;">Weight: {data_bundle['cap_pct']}%<br>Vol: Rs. {volume_display}</small></div>""", unsafe_allow_html=True)
 
 st.markdown("---")
-
-# Define a helper for the CSS-based heatmap visuals
-def render_sector_card(sect, data):
-    bias_color = "#28a745" if data["bias"] == "BULLISH" else "#dc3545"
-    bg_color = "#d4edda" if data["bias"] == "BULLISH" else "#f8d7da"
-    label = "🟢 BULLISH STRUCTURE" if data["bias"] == "BULLISH" else "🔴 RISK/CONSOLIDATION"
-    
-    vol_display = f"{data['volume_pkr'] / 1e6:.1f}M" if data['volume_pkr'] < 1e9 else f"{data['volume_pkr'] / 1e9:.2f}B"
-    
-    return f"""
-    <div style="background-color:{bg_color}; border-left:6px solid {bias_color}; padding:15px; border-radius:5px; height:130px; margin-bottom:15px;">
-        <b style="color:#333; font-size:14px;">{sect}</b><br>
-        <span style="color:{bias_color}; font-size:11px; font-weight:bold;">{label}</span><br>
-        <small style="color:#555;">Weight: {data['cap_pct']}%<br>Vol: Rs. {vol_display}</small>
-    </div>
-    """
-# Render in grid
-for row_idx in range(0, len(sorted_heatmap_keys), 4):
-    cols = st.columns(4)
-    for i, sect in enumerate(sorted_heatmap_keys[row_idx:row_idx + 4]):
-        data = heatmap_stats.get(sect, {"bias": "BEARISH", "cap_pct": 0.0, "volume_pkr": 0.0})
-        cols[i].markdown(render_sector_card(sect, data), unsafe_allow_html=True)
 
 # --- CORE QUANT ENGINE ---
 if st.sidebar.button("Execute Quantitative Processing Engine"):
@@ -390,29 +368,30 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
             if df_index is not None:
                 recent_data = df_index.tail(60)
                 slope, intercept = np.polyfit(np.arange(forecast_days), df_index['Close'].tail(forecast_days).values, 1)
-                last_date = recent_data.index[-1]
                 
-                # --- TIMELINE ALIGNMENT SYNC (TIMEZONE-AWARE PRESERVATION) ---
-                current_date_normalized = pd.Timestamp.now(tz=df_index.index.tz).normalize()
-                if last_date.normalize() >= current_date_normalized:
-                    start_projection_date = last_date + pd.Timedelta(days=1)
-                else:
-                    if current_date_normalized.dayofweek < 5:
-                        start_projection_date = current_date_normalized + pd.Timedelta(days=1)
-                    else:
-                        start_projection_date = last_date + pd.Timedelta(days=1)
+                # --- DYNAMIC HISTORICAL DATA PACKET ANCHOR (COMPOSITE) ---
+                last_available_session = recent_data.index[-1]
+                last_available_close = recent_data['Close'].iloc[-1]
                 
-                future_dates = pd.date_range(start=start_projection_date, periods=forecast_days, freq='B')
-                future_y_values = [df_index['Close'].iloc[-1] + (slope * i) for i in range(1, forecast_days + 1)]
+                # Dynamic Intercept Walk: Generate forward business days ignoring weekends entirely
+                future_dates = []
+                current_date_pointer = last_available_session
+                while len(future_dates) < forecast_days:
+                    current_date_pointer += pd.Timedelta(days=1)
+                    if current_date_pointer.weekday() < 5:  # Natively strips out Saturdays & Sundays
+                        future_dates.append(current_date_pointer)
+                        
+                future_y_values = [last_available_close + (slope * (i + 1)) for i in range(forecast_days)]
                 
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['Close'], name='Sector Index Price', line=dict(color='#4b0082', width=3)))
                 fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#ff7f0e', dash='dash')))
                 fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#2ca02c', dash='dash')))
                 
+                # Seamless vector stitch: Index [0] is explicitly the last active candle day inside the data packet
                 fig.add_trace(go.Scatter(
-                    x=[recent_data.index[-1]] + list(future_dates),
-                    y=[recent_data['Close'].iloc[-1]] + future_y_values,
+                    x=[last_available_session] + list(future_dates),
+                    y=[last_available_close] + future_y_values,
                     name=f'{forecast_days}-Day Predictive Slope Vector',
                     line=dict(color='#00bfff', width=2.5, dash='dot')
                 ))
@@ -458,29 +437,30 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                 if df_stock is not None:
                     recent_data = df_stock.tail(60)
                     slope, _ = np.polyfit(np.arange(forecast_days), df_stock['Close'].tail(forecast_days).values, 1)
-                    last_date = recent_data.index[-1]
                     
-                    # --- TIMELINE ALIGNMENT SYNC (TIMEZONE-AWARE PRESERVATION) ---
-                    current_date_normalized = pd.Timestamp.now(tz=df_stock.index.tz).normalize()
-                    if last_date.normalize() >= current_date_normalized:
-                        start_projection_date = last_date + pd.Timedelta(days=1)
-                    else:
-                        if current_date_normalized.dayofweek < 5:
-                            start_projection_date = current_date_normalized + pd.Timedelta(days=1)
-                        else:
-                            start_projection_date = last_date + pd.Timedelta(days=1)
+                    # --- DYNAMIC HISTORICAL DATA PACKET ANCHOR (INDIVIDUAL TICKER) ---
+                    last_available_session = recent_data.index[-1]
+                    last_available_close = recent_data['Close'].iloc[-1]
                     
-                    future_dates = pd.date_range(start=start_projection_date, periods=forecast_days, freq='B')
-                    future_y_values = [df_stock['Close'].iloc[-1] + (slope * i) for i in range(1, forecast_days + 1)]
+                    # Dynamic Intercept Walk: Generate forward business days ignoring weekends entirely
+                    future_dates = []
+                    current_date_pointer = last_available_session
+                    while len(future_dates) < forecast_days:
+                        current_date_pointer += pd.Timedelta(days=1)
+                        if current_date_pointer.weekday() < 5:  # Natively strips out Saturdays & Sundays
+                            future_dates.append(current_date_pointer)
+                            
+                    future_y_values = [last_available_close + (slope * (i + 1)) for i in range(forecast_days)]
                     
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['Close'], name='Stock Price (PKR)', line=dict(color='#004085', width=3)))
                     fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#ff7f0e', dash='dash')))
                     fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#2ca02c', dash='dash')))
                     
+                    # Seamless vector stitch: Index [0] matches the hard line terminal coordinates, completely removing structural timeline disconnects
                     fig.add_trace(go.Scatter(
-                        x=[recent_data.index[-1]] + list(future_dates),
-                        y=[recent_data['Close'].iloc[-1]] + future_y_values,
+                        x=[last_available_session] + list(future_dates),
+                        y=[last_available_close] + future_y_values,
                         name=f'{forecast_days}-Day Predictive Vector',
                         line=dict(color='#00bfff', width=2.5, dash='dot')
                     ))
