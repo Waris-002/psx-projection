@@ -7,20 +7,24 @@ from ta.momentum import RSIIndicator
 from ta.volatility import BollingerBands
 from ta.trend import EMAIndicator, MACD
 
-# --- STRUCTURAL DICTIONARIES & QUANT MATRICES ---
+# --- INSTITUTIONAL STRUCTURAL DICTIONARIES & QUANT MATRICES (94 SECURITIES) ---
 SECURITY_DICTIONARY = {
+    "Commercial Banks": {
+        "UBL.KA": "United Bank Limited", "MEBL.KA": "Meezan Bank Limited",
+        "MCB.KA": "MCB Bank Limited", "HBL.KA": "Habib Bank Limited",
+        "BAHL.KA": "Bank AL Habib Limited", "BAFL.KA": "Bank Alfalah Limited",
+        "NBP.KA": "National Bank of Pakistan", "FABL.KA": "Faysal Bank Limited",
+        "ABL.KA": "Allied Bank Limited", "BOP.KA": "The Bank of Punjab",
+        "AKBL.KA": "Askari Bank Limited", "JSBL.KA": "JS Bank Limited",
+        "SBL.KA": "Samba Bank Limited", "SNBL.KA": "Soneri Bank Limited",
+        "BIPL.KA": "Bankislami Pakistan Limited"
+    },
     "Technology & Communication": {
         "SYS.KA": "Systems Limited", "TRG.KA": "TRG Pakistan Limited",
-        "NETSOL.KA": "NetSol Technologies Limited", "AVN.KA": "Avanceon Limited",
-        "OCTOPUS.KA": "Octopus Digital Limited", "AIRLINK.KA": "Air Link Communication Limited",
-        "TELE.KA": "Telecard Limited", "WTL.KA": "WorldCall Telecom Limited"
-    },
-    "Commercial Banks": {
-        "MEBL.KA": "Meezan Bank Limited", "UBL.KA": "United Bank Limited",
-        "MCB.KA": "MCB Bank Limited", "HBL.KA": "Habib Bank Limited",
-        "NBP.KA": "National Bank of Pakistan", "BAHL.KA": "Bank AL Habib Limited",
-        "BAFL.KA": "Bank Alfalah Limited", "FABL.KA": "Faysal Bank Limited",
-        "BOP.KA": "The Bank of Punjab", "ABL.KA": "Allied Bank Limited"
+        "AIRLINK.KA": "Air Link Communication Limited", "NETSOL.KA": "NetSol Technologies Limited",
+        "AVN.KA": "Avanceon Limited", "OCTOPUS.KA": "Octopus Digital Limited",
+        "TELE.KA": "Telecard Limited", "WTL.KA": "WorldCall Telecom Limited",
+        "PTC.KA": "Pakistan Telecommunication Company Limited"
     },
     "Oil & Gas Exploration": {
         "OGDC.KA": "Oil & Gas Development Company Limited", "PPL.KA": "Pakistan Petroleum Limited",
@@ -33,58 +37,70 @@ SECURITY_DICTIONARY = {
     },
     "Fertilizer": {
         "FFC.KA": "Fauji Fertilizer Company Limited", "EFERT.KA": "Engro Fertilizers Limited",
-        "FATIMA.KA": "Fatima Fertilizer Company Limited", "ENGRO.KA": "Engro Corporation Limited"
+        "ENGRO.KA": "Engro Corporation Limited", "FATIMA.KA": "Fatima Fertilizer Company Limited"
     },
     "Cement": {
         "LUCK.KA": "Lucky Cement Limited", "DGKC.KA": "D.G. Khan Cement Company Limited",
         "MLCF.KA": "Maple Leaf Cement Factory Limited", "CHCC.KA": "Cherat Cement Company Limited",
         "FCCL.KA": "Fauji Cement Company Limited", "KOHC.KA": "Kohat Cement Company Limited",
-        "PIOC.KA": "Pioneer Cement Limited"
-    },
-    "Automobile Assembler": {
-        "MTL.KA": "Millat Tractors Limited", "INDU.KA": "Indus Motor Company Limited",
-        "ATLH.KA": "Atlas Honda Limited", "HCAR.KA": "Honda Atlas Cars (Pakistan) Limited",
-        "SAZEW.KA": "Sazgar Engineering Works Limited"
-    },
-    "Pharmaceuticals": {
-        "SEARL.KA": "The Searle Company Limited", "AGP.KA": "AGP Limited",
-        "FEROZ.KA": "Ferozsons Laboratories Limited", "GLAXO.KA": "GlaxoSmithKline Pakistan Limited",
-        "ABBOTT.KA": "Abbott Laboratories (Pakistan) Limited"
-    },
-    "Power Generation & Distribution": {
-        "HUBC.KA": "The Hub Power Company Limited", "KEL.KA": "K-Electric Limited",
-        "KAPCO.KA": "Kot Addu Power Company Limited", "NPL.KA": "Nishat Power Limited"
-    },
-    "Refinery": {
-        "ATRL.KA": "Attock Refinery Limited", "PRL.KA": "Pakistan Refinery Limited",
-        "NRL.KA": "National Refinery Limited"
+        "PIOC.KA": "Pioneer Cement Limited", "BWCL.KA": "Bestway Cement Limited",
+        "SGWCL.KA": "Thatta Cement Company Limited", "POWER.KA": "Power Cement Limited"
     },
     "Engineering": {
         "MUGHAL.KA": "Mughal Iron & Steel Industries Limited", "ASTL.KA": "Amreli Steels Limited",
-        "AGHA.KA": "Agha Steel Industries Limited", "KSBP.KA": "KSB Pumps Company Limited"
+        "AGHA.KA": "Agha Steel Industries Limited", "KSBP.KA": "KSB Pumps Company Limited",
+        "ISL.KA": "International Steels Limited", "INIL.KA": "International Industries Limited",
+        "ASL.KA": "Aisha Steel Mills Limited", "ITTEFAQ.KA": "Ittefaq Iron Industries Limited",
+        "BOLAN.KA": "Bolan Castings Limited", "CRES.KA": "Crescent Steel & Investments Limited",
+        "DOST.KA": "Dost Steels Limited"
+    },
+    "Automobile Assembler": {
+        "MTL.KA": "Millat Tractors Limited", "INDU.KA": "Indus Motor Company Limited",
+        "SAZEW.KA": "Sazgar Engineering Works Limited", "ATLH.KA": "Atlas Honda Limited",
+        "HCAR.KA": "Honda Atlas Cars (Pakistan) Limited", "GHAL.KA": "Ghandhara Industries Limited",
+        "GHNI.KA": "Ghandhara Nissan Limited", "PSMC.KA": "Pak Suzuki Motor Company Limited"
+    },
+    "Pharmaceuticals": {
+        "SEARL.KA": "The Searle Company Limited", "ABBOTT.KA": "Abbott Laboratories (Pakistan) Limited",
+        "GLAXO.KA": "GlaxoSmithKline Pakistan Limited", "AGP.KA": "AGP Limited",
+        "FEROZ.KA": "Ferozsons Laboratories Limited", "IBFL.KA": "IBL HealthCare Limited",
+        "CITI.KA": "Citi Pharma Limited"
+    },
+    "Power Generation & Distribution": {
+        "HUBC.KA": "The Hub Power Company Limited", "KEL.KA": "K-Electric Limited",
+        "KAPCO.KA": "Kot Addu Power Company Limited", "NPL.KA": "Nishat Power Limited",
+        "NCPL.KA": "Nishat Chunian Power Limited", "LPL.KA": "Lalpir Power Limited",
+        "PKGP.KA": "Pakgen Power Limited", "SPWL.KA": "Saif Power Limited"
+    },
+    "Refinery": {
+        "ATRL.KA": "Attock Refinery Limited", "PRL.KA": "Pakistan Refinery Limited",
+        "NRL.KA": "National Refinery Limited", "CYAN.KA": "Cnergyico PK Limited"
     },
     "Chemical": {
+        "COLG.KA": "Colgate-Palmolive (Pakistan) Limited", "ICI.KA": "Lucky Core Industries Limited",
         "EPCL.KA": "Engro Polymer & Chemicals Limited", "LOTCHEM.KA": "Lotte Chemical Pakistan Limited",
-        "ICI.KA": "Lucky Core Industries Limited", "COLG.KA": "Colgate-Palmolive (Pakistan) Limited"
+        "GGL.KA": "Ghani Global Glass Limited", "GHGL.KA": "Ghani Chemical Industries Limited",
+        "DOL.KA": "Descon Oxychem Limited", "NICL.KA": "Nimir Industrial Chemicals Limited"
     }
 }
 
+# Estimated weights mapped for sector weight composite configurations
 CAP_WEIGHT_UNITS = {
-    "SYS.KA": 140.0, "TRG.KA": 45.0, "NETSOL.KA": 12.0, "AVN.KA": 15.0, "OCTOPUS.KA": 8.0, "AIRLINK.KA": 35.0, "TELE.KA": 4.0, "WTL.KA": 12.0,
-    "MEBL.KA": 380.0, "UBL.KA": 420.0, "MCB.KA": 310.0, "HBL.KA": 180.0, "NBP.KA": 150.0, "BAHL.KA": 160.0, "BAFL.KA": 140.0, "FABL.KA": 75.0, "BOP.KA": 25.0, "ABL.KA": 110.0,
+    "UBL.KA": 420.0, "MEBL.KA": 380.0, "MCB.KA": 310.0, "HBL.KA": 180.0, "BAHL.KA": 160.0, "BAFL.KA": 140.0, "NBP.KA": 150.0, "FABL.KA": 75.0, "ABL.KA": 110.0, "BOP.KA": 25.0, "AKBL.KA": 35.0, "JSBL.KA": 15.0, "SBL.KA": 12.0, "SNBL.KA": 18.0, "BIPL.KA": 22.0,
+    "SYS.KA": 140.0, "TRG.KA": 45.0, "AIRLINK.KA": 35.0, "NETSOL.KA": 12.0, "AVN.KA": 15.0, "OCTOPUS.KA": 8.0, "TELE.KA": 4.0, "WTL.KA": 12.0, "PTC.KA": 28.0,
     "OGDC.KA": 620.0, "PPL.KA": 340.0, "MARI.KA": 490.0, "POL.KA": 150.0,
     "PSO.KA": 90.0, "SNGP.KA": 45.0, "SSGC.KA": 12.0, "APL.KA": 55.0, "HASCOL.KA": 8.0, "SHEL.KA": 22.0,
-    "FFC.KA": 410.0, "EFERT.KA": 250.0, "FATIMA.KA": 95.0, "ENGRO.KA": 280.0,
-    "LUCK.KA": 240.0, "DGKC.KA": 38.0, "MLCF.KA": 42.0, "CHCC.KA": 36.0, "FCCL.KA": 52.0, "KOHC.KA": 44.0, "PIOC.KA": 28.0,
-    "MTL.KA": 95.0, "INDU.KA": 130.0, "ATLH.KA": 48.0, "HCAR.KA": 22.0, "SAZEW.KA": 62.0,
-    "SEARL.KA": 35.0, "AGP.KA": 28.0, "FEROZ.KA": 14.0, "GLAXO.KA": 24.0, "ABBOTT.KA": 75.0,
-    "HUBC.KA": 320.0, "KEL.KA": 110.0, "KAPCO.KA": 32.0, "NPL.KA": 14.0,
-    "ATRL.KA": 110.0, "PRL.KA": 28.0, "NRL.KA": 38.0,
-    "MUGHAL.KA": 32.0, "ASTL.KA": 12.0, "AGHA.KA": 8.0, "KSBP.KA": 6.0,
-    "EPCL.KA": 45.0, "LOTCHEM.KA": 32.0, "ICI.KA": 120.0, "COLG.KA": 180.0
+    "FFC.KA": 410.0, "EFERT.KA": 250.0, "ENGRO.KA": 280.0, "FATIMA.KA": 95.0,
+    "LUCK.KA": 240.0, "DGKC.KA": 38.0, "MLCF.KA": 42.0, "CHCC.KA": 36.0, "FCCL.KA": 52.0, "KOHC.KA": 44.0, "PIOC.KA": 28.0, "BWCL.KA": 110.0, "SGWCL.KA": 8.0, "POWER.KA": 14.0,
+    "MUGHAL.KA": 32.0, "ASTL.KA": 12.0, "AGHA.KA": 8.0, "KSBP.KA": 6.0, "ISL.KA": 45.0, "INIL.KA": 38.0, "ASL.KA": 11.0, "ITTEFAQ.KA": 5.0, "BOLAN.KA": 4.0, "CRES.KA": 9.0, "DOST.KA": 3.0,
+    "MTL.KA": 95.0, "INDU.KA": 130.0, "SAZEW.KA": 62.0, "ATLH.KA": 48.0, "HCAR.KA": 22.0, "GHAL.KA": 8.0, "GHNI.KA": 6.0, "PSMC.KA": 45.0,
+    "SEARL.KA": 35.0, "ABBOTT.KA": 75.0, "GLAXO.KA": 24.0, "AGP.KA": 28.0, "FEROZ.KA": 14.0, "IBFL.KA": 8.0, "CITI.KA": 12.0,
+    "HUBC.KA": 320.0, "KEL.KA": 110.0, "KAPCO.KA": 32.0, "NPL.KA": 14.0, "NCPL.KA": 11.0, "LPL.KA": 12.0, "PKGP.KA": 10.0, "SPWL.KA": 9.0,
+    "ATRL.KA": 110.0, "PRL.KA": 28.0, "NRL.KA": 38.0, "CYAN.KA": 15.0,
+    "COLG.KA": 180.0, "ICI.KA": 120.0, "EPCL.KA": 45.0, "LOTCHEM.KA": 32.0, "GGL.KA": 7.0, "GHGL.KA": 14.0, "DOL.KA": 6.0, "NICL.KA": 24.0
 }
 
-TOTAL_ESTIMATED_PSX_CAP = 9500.0
+TOTAL_ESTIMATED_PSX_CAP = 12500.0
 
 def compute_technical_metrics(df):
     if df.empty or len(df) < 50:
@@ -173,7 +189,7 @@ forecast_days = st.sidebar.slider("Interactive Plot Display Forecast Path (Days)
 st.markdown("### 🗺️ Systemic Sector Structural Trend Heatmap")
 st.markdown(f"*Dynamic analytics sorted from **maximum to minimum traded volume** for exactly the last **{forecast_days} trading days**.*")
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=120)  # Upped TTL to 120s due to larger computational matrix processing
 def compute_heatmap_and_volume_data(days_span):
     diagnostics = {}
     for sect in sector_keys:
@@ -215,10 +231,9 @@ def compute_heatmap_and_volume_data(days_span):
         }
     return diagnostics
 
-with st.spinner("Processing timeline data arrays..."):
+with st.spinner("Processing deep matrix timeline arrays across 94 securities..."):
     heatmap_stats = compute_heatmap_and_volume_data(forecast_days)
 
-# REAL-TIME RE-ARRANGEMENT: Sort sector keys descending by computed liquidity volume
 sorted_sector_keys = sorted(sector_keys, key=lambda s: heatmap_stats.get(s, {}).get("volume_pkr", 0.0), reverse=True)
 
 for row_idx in range(0, len(sorted_sector_keys), 4):
@@ -283,7 +298,6 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                     matrix_dataframe_list.append(weighted_vector_series.to_frame(name=ticker))
                     weight_sum_tracker += weight_factor
                     
-                    # Calculate volume for company sorting logic
                     company_recent_window = raw_df.tail(forecast_days)
                     company_traded_val_pkr = (company_recent_window['Close'] * company_recent_window['Volume']).sum()
                     
@@ -306,7 +320,7 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                             "Trend Alignment Floor": "Above Support" if latest_row['EMA_20'] > latest_row['EMA_50'] else "Below Base",
                             "Integrated Strategy Score": "🟢 BULLISH" if tracking_prob >= 55.0 else "🔴 BEARISH/RISK",
                             f"{forecast_days}-Day Projected Vector Price": proj_display_string,
-                            "_sort_vol": company_traded_val_pkr  # Hidden column used purely for sorting dataframes
+                            "_sort_vol": company_traded_val_pkr
                         })
             except: 
                 pass
@@ -355,8 +369,6 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
             st.markdown(f"### 📋 Underlying Sector Component Health Tracker: {selected_sector} *(Sorted by Volatility/Liquidity)*")
             if individual_company_records:
                 rec_df = pd.DataFrame(individual_company_records)
-                
-                # REAL-TIME RE-ARRANGEMENT: Sort companies descending based on their volume run
                 rec_df = rec_df.sort_values(by="_sort_vol", ascending=False).drop(columns=["_sort_vol"])
                 
                 def highlight_matrix_cells(val):
