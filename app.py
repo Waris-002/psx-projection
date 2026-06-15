@@ -274,9 +274,15 @@ if not pool_df.empty and not master_returns_df.empty:
         with alpha_col2:
             st.markdown("### 📊 Internal Portfolio Covariance Structure Matrix")
             
-            # Replaced color-map function with standard formatting style layout to avoid external matplotlib/styler engine dependencies
+            # Formatted style layout directly avoids using .background_gradient to drop matplotlib dependencies entirely
+            def color_cells_manually(val):
+                if val == 1.0: return 'background-color: #fce4d6; font-weight: bold;'
+                elif val < 0: return 'background-color: #e2efda; color: #375623;'
+                elif val > 0.5: return 'background-color: #fff2cc;'
+                return ''
+
             st.dataframe(
-                sub_matrix.style.format(precision=2),
+                sub_matrix.style.map(color_cells_manually).format(precision=2),
                 use_container_width=True
             )
     else:
@@ -306,7 +312,6 @@ st.markdown("---")
 
 # --- CORE QUANT ENGINE ---
 if st.sidebar.button("Execute Quantitative Processing Engine"):
-    current_date_normalized = pd.Timestamp.now().normalize()
     
     if run_sector_analysis:
         st.subheader(f"📊 Value-Weighted Structural Index Matrix: {selected_sector}")
@@ -365,7 +370,8 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                 slope, intercept = np.polyfit(np.arange(forecast_days), df_index['Close'].tail(forecast_days).values, 1)
                 last_date = recent_data.index[-1]
                 
-                # --- TIMELINE ALIGNMENT SYNC ---
+                # --- TIMELINE ALIGNMENT SYNC (TIMEZONE-AWARE PRESERVATION) ---
+                current_date_normalized = pd.Timestamp.now(tz=df_index.index.tz).normalize()
                 if last_date.normalize() >= current_date_normalized:
                     start_projection_date = last_date + pd.Timedelta(days=1)
                 else:
@@ -432,7 +438,8 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                     slope, _ = np.polyfit(np.arange(forecast_days), df_stock['Close'].tail(forecast_days).values, 1)
                     last_date = recent_data.index[-1]
                     
-                    # --- TIMELINE ALIGNMENT SYNC ---
+                    # --- TIMELINE ALIGNMENT SYNC (TIMEZONE-AWARE PRESERVATION) ---
+                    current_date_normalized = pd.Timestamp.now(tz=df_stock.index.tz).normalize()
                     if last_date.normalize() >= current_date_normalized:
                         start_projection_date = last_date + pd.Timedelta(days=1)
                     else:
