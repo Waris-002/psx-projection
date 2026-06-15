@@ -198,91 +198,92 @@ def compute_complete_market_matrix(days_span):
 with st.spinner("Processing structural trend tracking matrix..."):
     heatmap_stats, complete_companies_pool, master_returns_df = compute_complete_market_matrix(forecast_days)
 
-# --- ⚡ REAL CORRELATION NET-OFF ENGINE ---
-st.markdown("## ⚡ Alpha Allocation Dashboard (Negative-Correlation Net-Off Engine)")
-
-sorted_alpha_sectors = sorted(sector_keys, key=lambda s: (heatmap_stats.get(s, {}).get("bias_score", 0.0), heatmap_stats.get(s, {}).get("volume_pkr", 0.0)), reverse=True)
-top_3_sectors = sorted_alpha_sectors[:3]
-
-suggested_sectors_data = []
-for idx, s_name in enumerate(top_3_sectors):
-    s_stats = heatmap_stats[s_name]
-    vol_m_b = f"Rs. {s_stats['volume_pkr'] / 1e9:.2f}B" if s_stats['volume_pkr'] >= 1e9 else f"Rs. {s_stats['volume_pkr'] / 1e6:.1f}M"
-    suggested_sectors_data.append({
-        "Rank Allocation": f"🏅 Top Choice {idx+1}",
-        "Target Market Sector": s_name,
-        "Structural Trend Health": f"🟢 {s_stats['bias_score']}% Bullish Confluence",
-        "Total Horizon Traded Liquidity": vol_m_b,
-        "Sector Weight Index": f"{s_stats['cap_pct']}%"
-    })
+# --- ⚡ CROSS-ASSET PORTFOLIO VARIANCE HEDGE ENGINE ---
+st.markdown("## ⚡ Cross-Asset Portfolio Variance Engine (Dynamic Net-Off)")
 
 pool_df = pd.DataFrame(complete_companies_pool)
 
-alpha_col1, alpha_col2 = st.columns([4, 5])
-
-with alpha_col1:
-    st.markdown("### 🏆 Top 3 Sector Allocations")
-    st.dataframe(pd.DataFrame(suggested_sectors_data), use_container_width=True, hide_index=True)
-
-with alpha_col2:
-    st.markdown("### 🎯 Top 5 Negatively Correlated Strategic Picks")
-    if not pool_df.empty and not master_returns_df.empty:
-        filtered_pool = pool_df[pool_df['Sector'].isin(top_3_sectors)].sort_values(by="Score Value", ascending=False)
+if not pool_df.empty and not master_returns_df.empty:
+    # 1. Gather the Alpha Gainers across the ENTIRE market pool
+    top_gainers_pool = pool_df[pool_df["Integrated Score"] == "🟢 BULLISH"].sort_values(by="Score Value", ascending=False).head(3)
+    
+    if len(top_gainers_pool) >= 3:
+        gainer_tickers = top_gainers_pool["Ticker Symbol"].tolist()
         
-        if len(filtered_pool) > 0:
-            anchor_ticker = filtered_pool.iloc[0]["Ticker Symbol"]
-            corr_matrix = master_returns_df.corr()
+        # 2. Calculate global correlation matrix over the return series
+        global_corr_matrix = master_returns_df.corr()
+        
+        # 3. Find the top 3 structural decliners/decoupled counters with the lowest cumulative correlation to our alphas
+        avg_market_correlations = global_corr_matrix[gainer_tickers].mean(axis=1).dropna()
+        sorted_hedges = avg_market_correlations.sort_values(ascending=True)
+        
+        hedge_records = []
+        added_hedges = set(gainer_tickers)
+        
+        for tik, corr_val in sorted_hedges.items():
+            if len(hedge_records) >= 3:
+                break
+            if tik in added_hedges:
+                continue
+            match_row = pool_df[pool_df["Ticker Symbol"] == tik]
+            if not match_row.empty:
+                hedge_records.append(match_row.iloc[0])
+                added_hedges.add(tik)
+                
+        top_hedges_pool = pd.DataFrame(hedge_records)
+        
+        # 4. Synthesize Portfolio Build
+        top_gainers_pool["Allocation Mode"] = "🚀 ALPHA LONG"
+        top_hedges_pool["Allocation Mode"] = "🛡️ HEDGE SHORT-NET"
+        
+        combined_portfolio_df = pd.concat([top_gainers_pool, top_hedges_pool]).copy()
+        portfolio_tickers = combined_portfolio_df["Ticker Symbol"].tolist()
+        
+        # 5. Map the precise correlation versus the portfolio's leading alpha asset
+        lead_alpha = gainer_tickers[0]
+        coefficients = [round(global_corr_matrix[lead_alpha].get(t, 1.0), 2) for t in portfolio_tickers]
+        corr_col_title = f"Correlation vs {lead_alpha}"
+        combined_portfolio_df[corr_col_title] = coefficients
+        
+        # 6. Compute True Portfolio Net-Off Variance Efficiency
+        sub_matrix = global_corr_matrix[portfolio_tickers].loc[portfolio_tickers]
+        upper_tri_elements = sub_matrix.values[np.triu_indices_from(sub_matrix, k=1)]
+        avg_portfolio_covariance = np.mean(upper_tri_elements) if len(upper_tri_elements) > 0 else 0.0
+        
+        # Scaling metric showing risk elimination status
+        net_off_efficiency = max(0.0, min(100.0, (1.0 - avg_portfolio_covariance) * 50.0))
+        
+        alpha_col1, alpha_col2 = st.columns([1, 1])
+        
+        with alpha_col1:
+            st.markdown("### 🎯 Automatically Constructed Balanced Portfolio Matrix")
+            display_cols = ["Allocation Mode", "Ticker Symbol", "Company Name", "Sector", "Price (PKR)", corr_col_title]
             
-            if anchor_ticker in corr_matrix.columns:
-                anchor_correlations = corr_matrix[anchor_ticker].dropna()
+            def highlight_portfolio_style(val):
+                if "🚀 ALPHA LONG" in str(val): return 'background-color: #e8f4fd; color: #004085; font-weight: bold;'
+                if "🛡️ HEDGE SHORT-NET" in str(val): return 'background-color: #fef9e7; color: #856404; font-weight: bold;'
+                try:
+                    if float(val) < 0.10: return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                except ValueError: pass
+                return ''
                 
-                top_hedged_records = []
-                top_hedged_records.append(filtered_pool.iloc[0])
-                
-                sorted_by_hedge = anchor_correlations.sort_values(ascending=True)
-                added_tickers = {anchor_ticker}
-                
-                for tik, corr_val in sorted_by_hedge.items():
-                    if len(top_hedged_records) >= 5:
-                        break
-                    if tik in added_tickers:
-                        continue
-                    
-                    match_row = pool_df[pool_df["Ticker Symbol"] == tik]
-                    if not match_row.empty:
-                        top_hedged_records.append(match_row.iloc[0])
-                        added_tickers.add(tik)
+            st.dataframe(
+                combined_portfolio_df[display_cols].style.map(highlight_portfolio_style),
+                use_container_width=True, hide_index=True
+            )
             
-                display_hedge_df = pd.DataFrame(top_hedged_records).copy()
-                
-                coefficients = [round(anchor_correlations.get(t, 1.0), 2) for t in display_hedge_df["Ticker Symbol"]]
-                corr_col_name = f"Correlation vs {anchor_ticker}"
-                display_hedge_df[corr_col_name] = coefficients
-                
-                avg_negative_corr = np.mean([c for c in coefficients if c < 0]) if any(c < 0 for c in coefficients) else 0.0
-                effective_hedging = abs(avg_negative_corr) * 100 if avg_negative_corr < 0 else 12.5
-                
-                final_cols = ["Ticker Symbol", "Company Name", "Sector", "Price (PKR)", corr_col_name, "Integrated Score"]
-                
-                def highlight_hedge_cells(val):
-                    try:
-                        if float(val) < 0: return 'background-color: #d4edda; color: #155724; font-weight: bold;'
-                        elif float(val) == 1.0: return 'background-color: #e2e3e5; color: #383d41; font-style: italic;'
-                    except ValueError: pass
-                    if "🟢" in str(val): return 'background-color: #d4edda; color: #155724; font-weight: bold;'
-                    return ''
-                    
-                st.dataframe(
-                    display_hedge_df[final_cols].style.map(highlight_hedge_cells),
-                    use_container_width=True,
-                    hide_index=True
-                )
-                
-                st.info(f"🔄 **Hedging Engine Analysis: Achieved {effective_hedging:.1f}% Effective Counter-Trend Risk Net-Off.**")
-        else:
-            st.info("No active corporate profiles fit tracking metrics.")
+            st.info(f"🔄 **Hedging Engine Analysis: Multi-Asset Variance Strategy achieved {net_off_efficiency:.1f}% Effective Systematic Risk Net-Off.**")
+            
+        with alpha_col2:
+            st.markdown("### 📊 Internal Portfolio Covariance Structure Matrix")
+            st.dataframe(
+                sub_matrix.style.background_gradient(cmap="RdYlGn_r", axis=None).format(precision=2),
+                use_container_width=True
+            )
     else:
-        st.info("Insufficient parallel history to compute correlation arrays.")
+        st.info("System currently processing sector configurations...")
+else:
+    st.info("Insufficient parallel pricing history to run global correlation analysis.")
 
 st.markdown("---")
 
@@ -334,7 +335,7 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                         tracking_prob = 75.0 if ema20 > ema50 else 35.0
                         
                         slope_current, _ = np.polyfit(np.arange(forecast_days), comp_metrics['Close'].tail(forecast_days).values, 1)
-                        proj_display_string = f"🟢 Rs. {latest_row['Close'] + (slope_current * forecast_days):.2f}" if slope_current >= 0 else f"🔴 Rs. {latest_row['Close'] + (slope_current * forecast_days):.2f}"
+                        proj_display_string = f"🟢 Rs. {latest_row['Close'] + (slope_current * forecast_days):.2f}" if slope_current >= 0 else f"🔴 Rs. {latest_row['Close'] + (latest_row['Close'] + (slope_current * forecast_days)):.2f}"
                         
                         individual_company_records.append({
                             "Ticker Symbol": ticker.replace(".KA",""),
@@ -367,7 +368,7 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                 
                 latest_idx_row = df.iloc[-1]
                 action_rec = "STRONG BUY" if latest_idx_row['EMA_20'] > latest_idx_row['EMA_50'] else "LIQUIDATE / AVOID"
-                action_prob = 75.0 if latest_idx_row['EMA_20'] > latest_idx_row['EMA_50'] else 35.0
+                action_prob = 75.0 if latest_idx_row['EMA_20'] > latest_idx_row['EMA_50'] else "LIQUIDATE / AVOID"
                 
                 st.markdown(f"### 🎯 Confluence Action Signals Allocation Engine")
                 col1, col2, col3 = st.columns(3)
@@ -378,7 +379,6 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
             st.markdown("---")
             if individual_company_records:
                 rec_df = pd.DataFrame(individual_company_records).sort_values(by="_sort_vol", ascending=False).drop(columns=["_sort_vol"])
-                
                 proj_col_name = f"{forecast_days}-Day Projected Vector Price"
                 
                 def highlight_matrix_cells(val):
