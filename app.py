@@ -171,7 +171,7 @@ forecast_days = st.sidebar.slider("Interactive Plot Display Forecast Path (Days)
 
 # --- SECTOR HEATMAP ENGINE ---
 st.markdown("### 🗺️ Systemic Sector Structural Trend Heatmap")
-st.markdown(f"*Dynamic analytics showing total accumulated volume for exactly the last **{forecast_days} trading days**.*")
+st.markdown(f"*Dynamic analytics sorted from **maximum to minimum traded volume** for exactly the last **{forecast_days} trading days**.*")
 
 @st.cache_data(ttl=60)
 def compute_heatmap_and_volume_data(days_span):
@@ -218,8 +218,11 @@ def compute_heatmap_and_volume_data(days_span):
 with st.spinner("Processing timeline data arrays..."):
     heatmap_stats = compute_heatmap_and_volume_data(forecast_days)
 
-for row_idx in range(0, len(sector_keys), 4):
-    row_sectors = sector_keys[row_idx:row_idx + 4]
+# REAL-TIME RE-ARRANGEMENT: Sort sector keys descending by computed liquidity volume
+sorted_sector_keys = sorted(sector_keys, key=lambda s: heatmap_stats.get(s, {}).get("volume_pkr", 0.0), reverse=True)
+
+for row_idx in range(0, len(sorted_sector_keys), 4):
+    row_sectors = sorted_sector_keys[row_idx:row_idx + 4]
     columns_track = st.columns(4)
     
     for i, sect in enumerate(row_sectors):
@@ -280,6 +283,10 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                     matrix_dataframe_list.append(weighted_vector_series.to_frame(name=ticker))
                     weight_sum_tracker += weight_factor
                     
+                    # Calculate volume for company sorting logic
+                    company_recent_window = raw_df.tail(forecast_days)
+                    company_traded_val_pkr = (company_recent_window['Close'] * company_recent_window['Volume']).sum()
+                    
                     comp_metrics = compute_technical_metrics(raw_df)
                     if comp_metrics is not None:
                         latest_row = comp_metrics.iloc[-1]
@@ -298,7 +305,8 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                             "Momentum Index (RSI)": round(latest_row['RSI'], 2),
                             "Trend Alignment Floor": "Above Support" if latest_row['EMA_20'] > latest_row['EMA_50'] else "Below Base",
                             "Integrated Strategy Score": "🟢 BULLISH" if tracking_prob >= 55.0 else "🔴 BEARISH/RISK",
-                            f"{forecast_days}-Day Projected Vector Price": proj_display_string
+                            f"{forecast_days}-Day Projected Vector Price": proj_display_string,
+                            "_sort_vol": company_traded_val_pkr  # Hidden column used purely for sorting dataframes
                         })
             except: 
                 pass
@@ -344,9 +352,12 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                 col3.metric("Multi-Horizon Probability Score", f"{action_probability}% Buy Profile")
             
             st.markdown("---")
-            st.markdown(f"### 📋 Underlying Sector Component Health Tracker: {selected_sector}")
+            st.markdown(f"### 📋 Underlying Sector Component Health Tracker: {selected_sector} *(Sorted by Volatility/Liquidity)*")
             if individual_company_records:
                 rec_df = pd.DataFrame(individual_company_records)
+                
+                # REAL-TIME RE-ARRANGEMENT: Sort companies descending based on their volume run
+                rec_df = rec_df.sort_values(by="_sort_vol", ascending=False).drop(columns=["_sort_vol"])
                 
                 def highlight_matrix_cells(val):
                     if "🟢" in str(val): 
