@@ -203,7 +203,7 @@ def compute_complete_market_matrix(days_span):
 with st.spinner("Processing structural trend tracking matrix..."):
     heatmap_stats, complete_companies_pool, master_returns_df = compute_complete_market_matrix(forecast_days)
 
-# --- ⚡ CROSS-ASSET PORTFOLIO VARIANCE HEDGE ENGINE ---
+# --- CROSS-ASSET PORTFOLIO VARIANCE HEDGE ENGINE ---
 st.markdown("## ⚡ Cross-Asset Portfolio Variance Engine (Dynamic Net-Off)")
 
 pool_df = pd.DataFrame(complete_companies_pool)
@@ -274,7 +274,6 @@ if not pool_df.empty and not master_returns_df.empty:
         with alpha_col2:
             st.markdown("### 📊 Internal Portfolio Covariance Structure Matrix")
             
-            # Formatted style layout directly avoids using .background_gradient to drop matplotlib dependencies entirely
             def color_cells_manually(val):
                 if val == 1.0: return 'background-color: #fce4d6; font-weight: bold;'
                 elif val < 0: return 'background-color: #e2efda; color: #375623;'
@@ -370,16 +369,9 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                 slope, intercept = np.polyfit(np.arange(forecast_days), df_index['Close'].tail(forecast_days).values, 1)
                 last_date = recent_data.index[-1]
                 
-                # --- TIMELINE ALIGNMENT SYNC (TIMEZONE-AWARE PRESERVATION) ---
-                current_date_normalized = pd.Timestamp.now(tz=df_index.index.tz).normalize()
-                if last_date.normalize() >= current_date_normalized:
-                    start_projection_date = last_date + pd.Timedelta(days=1)
-                else:
-                    if current_date_normalized.dayofweek < 5:
-                        start_projection_date = current_date_normalized + pd.Timedelta(days=1)
-                    else:
-                        start_projection_date = last_date + pd.Timedelta(days=1)
-                
+                # --- FIXED TIMELINE ENGINE FOR COMPOSITE PATHWAY ---
+                # Forecast begins on the next business day relative to the actual historical data tail
+                start_projection_date = last_date + pd.Timedelta(days=1)
                 future_dates = pd.date_range(start=start_projection_date, periods=forecast_days, freq='B')
                 future_y_values = [df_index['Close'].iloc[-1] + (slope * i) for i in range(1, forecast_days + 1)]
                 
@@ -388,8 +380,9 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                 fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#ff7f0e', dash='dash')))
                 fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#2ca02c', dash='dash')))
                 
+                # Connect seamlessly by including last historical element at index 0 of predictive path
                 fig.add_trace(go.Scatter(
-                    x=[recent_data.index[-1]] + list(future_dates),
+                    x=[last_date] + list(future_dates),
                     y=[recent_data['Close'].iloc[-1]] + future_y_values,
                     name=f'{forecast_days}-Day Predictive Slope Vector',
                     line=dict(color='#00bfff', width=2.5, dash='dot')
@@ -438,16 +431,9 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                     slope, _ = np.polyfit(np.arange(forecast_days), df_stock['Close'].tail(forecast_days).values, 1)
                     last_date = recent_data.index[-1]
                     
-                    # --- TIMELINE ALIGNMENT SYNC (TIMEZONE-AWARE PRESERVATION) ---
-                    current_date_normalized = pd.Timestamp.now(tz=df_stock.index.tz).normalize()
-                    if last_date.normalize() >= current_date_normalized:
-                        start_projection_date = last_date + pd.Timedelta(days=1)
-                    else:
-                        if current_date_normalized.dayofweek < 5:
-                            start_projection_date = current_date_normalized + pd.Timedelta(days=1)
-                        else:
-                            start_projection_date = last_date + pd.Timedelta(days=1)
-                    
+                    # --- FIXED TIMELINE ENGINE FOR INDIVIDUAL PATHWAY ---
+                    # The projection calculation anchors cleanly to the last traded day from the yfinance array
+                    start_projection_date = last_date + pd.Timedelta(days=1)
                     future_dates = pd.date_range(start=start_projection_date, periods=forecast_days, freq='B')
                     future_y_values = [df_stock['Close'].iloc[-1] + (slope * i) for i in range(1, forecast_days + 1)]
                     
@@ -456,8 +442,9 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                     fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#ff7f0e', dash='dash')))
                     fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#2ca02c', dash='dash')))
                     
+                    # Eliminates timeline gaps completely by connecting the solid line explicitly to the first dot
                     fig.add_trace(go.Scatter(
-                        x=[recent_data.index[-1]] + list(future_dates),
+                        x=[last_date] + list(future_dates),
                         y=[recent_data['Close'].iloc[-1]] + future_y_values,
                         name=f'{forecast_days}-Day Predictive Vector',
                         line=dict(color='#00bfff', width=2.5, dash='dot')
