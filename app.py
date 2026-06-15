@@ -183,7 +183,7 @@ def compute_complete_market_matrix(days_span):
             except: 
                 pass
             
-        cap_pct_of_psx = (sector_cap_accumulator / TOTAL_ESTIMATED_PSX_CAP) * 100
+        cap_pct of_psx = (sector_cap_accumulator / TOTAL_ESTIMATED_PSX_CAP) * 100
         bias_pct = (bullish_count / total_valid) * 100 if total_valid > 0 else 0.0
         bias = "BULLISH" if bias_pct >= 40.0 else "BEARISH"
         
@@ -269,7 +269,6 @@ if not pool_df.empty and not master_returns_df.empty:
         with alpha_col2:
             st.markdown("### 📊 Internal Portfolio Covariance Structure Matrix")
             
-            # Pure CSS Heatmap Engine avoiding external library requirements
             def style_covariance_matrix(val):
                 try:
                     v = float(val)
