@@ -5,88 +5,492 @@ import yfinance as yf
 import plotly.graph_objects as go
 from ta.momentum import RSIIndicator
 from ta.trend import EMAIndicator
-import time
 
-# --- 1. CONFIGURATION & DICTIONARY ---
-# Full dictionary of PSX securities
+# --- INSTITUTIONAL STRUCTURAL DICTIONARIES & QUANT MATRICES (94 SECURITIES) ---
 SECURITY_DICTIONARY = {
     "Commercial Banks": {
         "UBL.KA": "United Bank Limited", "MEBL.KA": "Meezan Bank Limited",
         "MCB.KA": "MCB Bank Limited", "HBL.KA": "Habib Bank Limited",
-        "BAHL.KA": "Bank AL Habib Limited", "BAFL.KA": "Bank Alfalah Limited"
+        "BAHL.KA": "Bank AL Habib Limited", "BAFL.KA": "Bank Alfalah Limited",
+        "NBP.KA": "National Bank of Pakistan", "FABL.KA": "Faysal Bank Limited",
+        "ABL.KA": "Allied Bank Limited", "BOP.KA": "The Bank of Punjab",
+        "AKBL.KA": "Askari Bank Limited", "JSBL.KA": "JS Bank Limited",
+        "SBL.KA": "Samba Bank Limited", "SNBL.KA": "Soneri Bank Limited",
+        "BIPL.KA": "Bankislami Pakistan Limited"
     },
     "Technology & Communication": {
         "SYS.KA": "Systems Limited", "TRG.KA": "TRG Pakistan Limited",
-        "AIRLINK.KA": "Air Link Communication Limited", "NETSOL.KA": "NetSol Technologies Limited"
+        "AIRLINK.KA": "Air Link Communication Limited", "NETSOL.KA": "NetSol Technologies Limited",
+        "AVN.KA": "Avanceon Limited", "OCTOPUS.KA": "Octopus Digital Limited",
+        "TELE.KA": "Telecard Limited", "WTL.KA": "WorldCall Telecom Limited",
+        "PTC.KA": "Pakistan Telecommunication Company Limited"
     },
     "Oil & Gas Exploration": {
         "OGDC.KA": "Oil & Gas Development Company Limited", "PPL.KA": "Pakistan Petroleum Limited",
         "MARI.KA": "Mari Petroleum Company Limited", "POL.KA": "Pakistan Oilfields Limited"
     },
+    "Oil & Gas Marketing": {
+        "PSO.KA": "Pakistan State Oil Company Limited", "SNGP.KA": "Sui Northern Gas Pipelines Limited",
+        "SSGC.KA": "Sui Southern Gas Company Limited", "APL.KA": "Attock Petroleum Limited",
+        "HASCOL.KA": "Hascol Petroleum Limited", "SHEL.KA": "Shell Pakistan Limited"
+    },
+    "Fertilizer": {
+        "FFC.KA": "Fauji Fertilizer Company Limited", "EFERT.KA": "Engro Fertilizers Limited",
+        "ENGRO.KA": "Engro Corporation Limited", "FATIMA.KA": "Fatima Fertilizer Company Limited"
+    },
     "Cement": {
         "LUCK.KA": "Lucky Cement Limited", "DGKC.KA": "D.G. Khan Cement Company Limited",
-        "MLCF.KA": "Maple Leaf Cement Factory Limited", "CHCC.KA": "Cherat Cement Company Limited"
+        "MLCF.KA": "Maple Leaf Cement Factory Limited", "CHCC.KA": "Cherat Cement Company Limited",
+        "FCCL.KA": "Fauji Cement Company Limited", "KOHC.KA": "Kohat Cement Company Limited",
+        "PIOC.KA": "Pioneer Cement Limited", "BWCL.KA": "Bestway Cement Limited",
+        "SGWCL.KA": "Thatta Cement Company Limited", "POWER.KA": "Power Cement Limited"
+    },
+    "Engineering": {
+        "MUGHAL.KA": "Mughal Iron & Steel Industries Limited", "ASTL.KA": "Amreli Steels Limited",
+        "AGHA.KA": "Agha Steel Industries Limited", "KSBP.KA": "KSB Pumps Company Limited",
+        "ISL.KA": "International Steels Limited", "INIL.KA": "International Industries Limited",
+        "ASL.KA": "Aisha Steel Mills Mills Limited", "ITTEFAQ.KA": "Ittefaq Iron Industries Limited",
+        "BOLAN.KA": "Bolan Castings Limited", "CRES.KA": "Crescent Steel & Investments Limited",
+        "DOST.KA": "Dost Steels Limited"
+    },
+    "Automobile Assembler": {
+        "MTL.KA": "Millat Tractors Limited", "INDU.KA": "Indus Motor Company Limited",
+        "SAZEW.KA": "Sazgar Engineering Works Limited", "ATLH.KA": "Atlas Honda Limited",
+        "HCAR.KA": "Honda Atlas Cars (Pakistan) Limited", "GHAL.KA": "Ghandhara Industries Limited",
+        "GHNI.KA": "Ghandhara Nissan Limited", "PSMC.KA": "Pak Suzuki Motor Company Limited"
+    },
+    "Pharmaceuticals": {
+        "SEARL.KA": "The Searle Company Limited", "ABBOTT.KA": "Abbott Laboratories (Pakistan) Limited",
+        "GLAXO.KA": "GlaxoSmithKline Pakistan Limited", "AGP.KA": "AGP Limited",
+        "FEROZ.KA": "Ferozsons Laboratories Limited", "IBFL.KA": "IBL HealthCare Limited",
+        "CITI.KA": "Citi Pharma Limited"
+    },
+    "Power Generation & Distribution": {
+        "HUBC.KA": "The Hub Power Company Limited", "KEL.KA": "K-Electric Limited",
+        "KAPCO.KA": "Kot Addu Power Company Limited", "NPL.KA": "Nishat Power Limited",
+        "NCPL.KA": "Nishat Chunian Power Limited", "LPL.KA": "Lalpir Power Limited",
+        "PKGP.KA": "Pakgen Power Limited", "SPWL.KA": "Saif Power Limited"
+    },
+    "Refinery": {
+        "ATRL.KA": "Attock Refinery Limited", "PRL.KA": "Pakistan Refinery Limited",
+        "NRL.KA": "National Refinery Limited", "CYAN.KA": "Cnergyico PK Limited"
+    },
+    "Chemical": {
+        "COLG.KA": "Colgate-Palmolive (Pakistan) Limited", "ICI.KA": "Lucky Core Industries Limited",
+        "EPCL.KA": "Engro Polymer & Chemicals Limited", "LOTCHEM.KA": "Lotte Chemical Pakistan Limited",
+        "GGL.KA": "Ghani Global Glass Limited", "GHGL.KA": "Ghani Chemical Industries Limited",
+        "DOL.KA": "Descon Oxychem Limited", "NICL.KA": "Nimir Industrial Chemicals Limited"
     }
 }
 
-# --- 2. ADVANCED DATA ENGINE WITH THROTTLING ---
-@st.cache_data(ttl=3600)
-def fetch_psx_market_data(all_tickers):
-    """
-    Fetches data with batching and throttling to avoid YFRateLimitError.
-    """
-    data_cache = {}
-    chunk_size = 5 # Smaller chunk size to stay under Yahoo API radar
-    for i in range(0, len(all_tickers), chunk_size):
-        chunk = all_tickers[i:i + chunk_size]
-        batch = yf.Tickers(" ".join(chunk))
-        
-        for symbol in chunk:
-            try:
-                hist = batch.tickers[symbol].history(period="1y", interval="1d", timeout=10)
-                if not hist.empty:
-                    # Fix: Standardize timezone to avoid comparison errors
-                    if hist.index.tz is not None:
-                        hist.index = hist.index.tz_localize(None)
-                    data_cache[symbol] = hist
-                time.sleep(1.0) # Throttling delay
-            except Exception as e:
-                continue
-    return data_cache
+CAP_WEIGHT_UNITS = {
+    "UBL.KA": 420.0, "MEBL.KA": 380.0, "MCB.KA": 310.0, "HBL.KA": 180.0, "BAHL.KA": 160.0, "BAFL.KA": 140.0, "NBP.KA": 150.0, "FABL.KA": 75.0, "ABL.KA": 110.0, "BOP.KA": 25.0, "AKBL.KA": 35.0, "JSBL.KA": 15.0, "SBL.KA": 12.0, "SNBL.KA": 18.0, "BIPL.KA": 22.0,
+    "SYS.KA": 140.0, "TRG.KA": 45.0, "AIRLINK.KA": 35.0, "NETSOL.KA": 12.0, "AVN.KA": 15.0, "OCTOPUS.KA": 8.0, "TELE.KA": 4.0, "WTL.KA": 12.0, "PTC.KA": 28.0,
+    "OGDC.KA": 620.0, "PPL.KA": 340.0, "MARI.KA": 490.0, "POL.KA": 150.0,
+    "PSO.KA": 90.0, "SNGP.KA": 45.0, "SSGC.KA": 12.0, "APL.KA": 55.0, "HASCOL.KA": 8.0, "SHEL.KA": 22.0,
+    "FFC.KA": 410.0, "EFERT.KA": 250.0, "ENGRO.KA": 280.0, "FATIMA.KA": 95.0,
+    "LUCK.KA": 240.0, "DGKC.KA": 38.0, "MLCF.KA": 42.0, "CHCC.KA": 36.0, "FCCL.KA": 52.0, "KOHC.KA": 44.0, "PIOC.KA": 28.0, "BWCL.KA": 110.0, "SGWCL.KA": 8.0, "POWER.KA": 14.0,
+    "MUGHAL.KA": 32.0, "ASTL.KA": 12.0, "AGHA.KA": 8.0, "KSBP.KA": 6.0, "ISL.KA": 45.0, "INIL.KA": 38.0, "ASL.KA": 11.0, "ITTEFAQ.KA": 5.0, "BOLAN.KA": 4.0, "CRES.KA": 9.0, "DOST.KA": 3.0,
+    "MTL.KA": 95.0, "INDU.KA": 130.0, "SAZEW.KA": 62.0, "ATLH.KA": 48.0, "HCAR.KA": 22.0, "GHAL.KA": 8.0, "GHNI.KA": 6.0, "PSMC.KA": 45.0,
+    "SEARL.KA": 35.0, "ABBOTT.KA": 75.0, "GLAXO.KA": 24.0, "AGP.KA": 28.0, "FEROZ.KA": 14.0, "IBFL.KA": 8.0, "CITI.KA": 12.0,
+    "HUBC.KA": 320.0, "KEL.KA": 110.0, "KAPCO.KA": 32.0, "NPL.KA": 14.0, "NCPL.KA": 11.0, "LPL.KA": 12.0, "PKGP.KA": 10.0, "SPWL.KA": 9.0,
+    "ATRL.KA": 110.0, "PRL.KA": 28.0, "NRL.KA": 38.0, "CYAN.KA": 15.0,
+    "COLG.KA": 180.0, "ICI.KA": 120.0, "EPCL.KA": 45.0, "LOTCHEM.KA": 32.0, "GGL.KA": 7.0, "GHGL.KA": 14.0, "DOL.KA": 6.0, "NICL.KA": 24.0
+}
 
-# --- 3. UI SETUP ---
-st.set_page_config(page_title="PSX Analytics Suite", layout="wide")
+TOTAL_ESTIMATED_PSX_CAP = 12500.0
+
+def fetch_live_realtime_dataframe(symbol):
+    """
+    Stitches standard historical daily data frames together with an intraday live feed
+    to eliminate the 1-day yfinance reporting delay completely.
+    """
+    ticker_obj = yf.Ticker(symbol)
+    hist_df = ticker_obj.history(period="1y", interval="1d")
+    
+    try:
+        live_today = ticker_obj.history(period="1d", interval="5m")
+        if not live_today.empty:
+            last_live_date = live_today.index[-1].floor('D')
+            if hist_df.empty or last_live_date > hist_df.index[-1].floor('D'):
+                live_row = pd.DataFrame({
+                    'Open': live_today['Open'].iloc[0],
+                    'High': live_today['High'].max(),
+                    'Low': live_today['Low'].min(),
+                    'Close': live_today['Close'].iloc[-1],
+                    'Volume': live_today['Volume'].sum()
+                }, index=[last_live_date])
+                hist_df = pd.concat([hist_df, live_row])
+                hist_df = hist_df.loc[~hist_df.index.duplicated(keep='last')]
+    except:
+        pass
+    return hist_df
+
+def compute_technical_metrics(data_frame):
+    if data_frame.empty or len(data_frame) < 50:
+        return None
+    df_clean = data_frame[['Open', 'High', 'Low', 'Close', 'Volume']].dropna().copy()
+    df_clean['EMA_20'] = EMAIndicator(close=df_clean['Close'], window=20).ema_indicator()
+    df_clean['EMA_50'] = EMAIndicator(close=df_clean['Close'], window=50).ema_indicator()
+    df_clean['RSI'] = RSIIndicator(close=df_clean['Close'], window=14).rsi()
+    return df_clean
+
+st.set_page_config(page_title="PSX Real-Time Analytics Command Suite", layout="wide")
 st.title("🏛️ PSX Real-Time Analytics Command Suite")
 
-all_tickers = [t for sect in SECURITY_DICTIONARY.values() for t in sect.keys()]
+# --- SIDEBAR CONTROLS ---
+st.sidebar.header("🕹️ Quantitative Controls")
+sector_keys = list(SECURITY_DICTIONARY.keys())
+selected_sector = st.sidebar.selectbox("Target Core Market Sector:", sector_keys)
+run_sector_analysis = st.sidebar.checkbox("Compute Value-Weighted Composite Sector Index", value=True)
 
-# Fix: Use correct casing for spinner
-with st.spinner("Syncing global real-time market matrices..."):
-    data_cache = fetch_psx_market_data(all_tickers)
+ticker_mapping = SECURITY_DICTIONARY[selected_sector]
+formatted_company_options = [f"{ticker} | {name}" for ticker, name in ticker_mapping.items()]
 
-# --- 4. VARIANCE ENGINE ---
-st.markdown("## ⚡ Cross-Asset Portfolio Variance Engine")
-# Fix: Ensure all_tickers contains valid keys from cache
-valid_tickers = [t for t in all_tickers if t in data_cache]
-closes = pd.concat([data_cache[t]['Close'] for t in valid_tickers], axis=1)
-closes.columns = [t.replace(".KA", "") for t in valid_tickers]
-corr_matrix = closes.corr()
+if run_sector_analysis:
+    selected_company_formatted = st.sidebar.selectbox("Target Corporate Security Focus:", ["Locked - Composite System Engaged"], disabled=True)
+else:
+    selected_company_formatted = st.sidebar.selectbox("Target Corporate Security Focus:", formatted_company_options, disabled=False)
 
-# Note: Ensure matplotlib is in requirements.txt to support background_gradient
-st.dataframe(corr_matrix.style.background_gradient(cmap='RdYlGn').format(precision=2), use_container_width=True)
+forecast_days = st.sidebar.slider("Interactive Plot Display Forecast Path (Days):", min_value=5, max_value=30, value=15)
 
-# --- 5. TARGETED TECHNICAL ANALYSIS ---
+# --- GLOBAL ENGINE DATA PRE-CALCULATION WITH REAL-TIME FEED ---
+@st.cache_data(ttl=30)
+def compute_complete_market_matrix(days_span):
+    diagnostics = {}
+    all_companies_flat_list = []
+    returns_master_dict = {}
+    
+    for sect in sector_keys:
+        companies = SECURITY_DICTIONARY[sect]
+        bullish_count, total_valid = 0, 0
+        sector_cap_accumulator = 0.0
+        total_volume_pkr_accumulator = 0.0
+        
+        for ticker in companies.keys():
+            sector_cap_accumulator += CAP_WEIGHT_UNITS.get(ticker, 5.0)
+            try:
+                hist = fetch_live_realtime_dataframe(ticker)
+                if not hist.empty and len(hist) >= 60:
+                    recent_window = hist.tail(days_span)
+                    traded_value_pkr = (recent_window['Close'] * recent_window['Volume']).sum()
+                    total_volume_pkr_accumulator += traded_value_pkr
+                    
+                    pct_returns = hist['Close'].pct_change().dropna()
+                    symbol_short = ticker.replace(".KA","")
+                    returns_master_dict[symbol_short] = pct_returns.tail(60)
+                    
+                    comp_metrics = compute_technical_metrics(hist)
+                    if comp_metrics is not None:
+                        latest_row = comp_metrics.iloc[-1]
+                        
+                        ema20 = latest_row['EMA_20']
+                        ema50 = latest_row['EMA_50']
+                        tracking_prob = 75.0 if ema20 > ema50 else 35.0
+                        
+                        slope_current, _ = np.polyfit(np.arange(days_span), comp_metrics['Close'].tail(days_span).values, 1)
+                        target_price_projection = latest_row['Close'] + (slope_current * days_span)
+                        proj_display_string = f"🟢 Rs. {target_price_projection:.2f}" if slope_current >= 0 else f"🔴 Rs. {target_price_projection:.2f}"
+                        
+                        stop_loss_val = ema50 if ema20 > ema50 else (latest_row['Close'] * 0.93)
+                        exit_cap_val = target_price_projection if slope_current > 0 else (latest_row['Close'] * 1.12)
+                        
+                        all_companies_flat_list.append({
+                            "Ticker Symbol": symbol_short,
+                            "Company Name": companies[ticker],
+                            "Sector": sect,
+                            "Price (PKR)": round(latest_row['Close'], 2),
+                            "Score Value": tracking_prob,
+                            "Integrated Score": "🟢 BULLISH" if tracking_prob >= 55.0 else "🔴 BEARISH/RISK",
+                            f"{days_span}-Day Projection": proj_display_string,
+                            "Exit Floor (PKR)": round(stop_loss_val, 2),
+                            "Exit Cap (PKR)": round(exit_cap_val, 2),
+                            "_volume_raw": traded_value_pkr
+                        })
+                        if ema20 > ema50: bullish_count += 1
+                    total_valid += 1
+            except: 
+                pass
+            
+        cap_pct_of_psx = (sector_cap_accumulator / TOTAL_ESTIMATED_PSX_CAP) * 100
+        bias_pct = (bullish_count / total_valid) * 100 if total_valid > 0 else 0.0
+        bias = "BULLISH" if bias_pct >= 40.0 else "BEARISH"
+        
+        diagnostics[sect] = {
+            "bias": bias,
+            "bias_score": round(bias_pct, 1),
+            "cap_pct": round(cap_pct_of_psx, 2),
+            "volume_pkr": total_volume_pkr_accumulator
+        }
+    return diagnostics, all_companies_flat_list, pd.DataFrame(returns_master_dict)
+
+with St.spinner("Syncing global real-time market matrices..."):
+    heatmap_stats, complete_companies_pool, master_returns_df = compute_complete_market_matrix(forecast_days)
+
+# --- CROSS-ASSET PORTFOLIO VARIANCE HEDGE ENGINE ---
+St.markdown("## ⚡ Cross-Asset Portfolio Variance Engine (Dynamic Live Net-Off)")
+
+pool_df = pd.DataFrame(complete_companies_pool)
+
+if not pool_df.empty and not master_returns_df.empty:
+    top_gainers_pool = pool_df[pool_df["Integrated Score"] == "🟢 BULLISH"].sort_values(by="Score Value", ascending=False).head(3).copy()
+    
+    if len(top_gainers_pool) >= 3:
+        gainer_tickers = top_gainers_pool["Ticker Symbol"].tolist()
+        global_corr_matrix = master_returns_df.corr()
+        
+        avg_market_correlations = global_corr_matrix[gainer_tickers].mean(axis=1).dropna()
+        sorted_hedges = avg_market_correlations.sort_values(ascending=True)
+        
+        hedge_records = []
+        added_hedges = set(gainer_tickers)
+        
+        for tik, corr_val in sorted_hedges.items():
+            if len(hedge_records) >= 3:
+                break
+            if tik in added_hedges:
+                continue
+            match_row = pool_df[pool_df["Ticker Symbol"] == tik]
+            if not match_row.empty:
+                hedge_records.append(match_row.iloc[0])
+                added_hedges.add(tik)
+                
+        top_hedges_pool = pd.DataFrame(hedge_records).copy()
+        
+        top_gainers_pool["Allocation Mode"] = "🚀 ALPHA LONG"
+        top_hedges_pool["Allocation Mode"] = "🛡️ HEDGE SHORT-NET"
+        
+        top_gainers_pool["Investment Allocation"] = "20.0%"
+        top_hedges_pool["Investment Allocation"] = "13.3%"
+        
+        combined_portfolio_df = pd.concat([top_gainers_pool, top_hedges_pool]).copy()
+        portfolio_tickers = combined_portfolio_df["Ticker Symbol"].tolist()
+        
+        lead_alpha = gainer_tickers[0]
+        coefficients = [round(global_corr_matrix[lead_alpha].get(t, 1.0), 2) for t in portfolio_tickers]
+        corr_col_title = f"Correlation vs {lead_alpha}"
+        combined_portfolio_df[corr_col_title] = coefficients
+        
+        sub_matrix = global_corr_matrix[portfolio_tickers].loc[portfolio_tickers]
+        upper_tri_elements = sub_matrix.values[np.triu_indices_from(sub_matrix, k=1)]
+        avg_portfolio_covariance = np.mean(upper_tri_elements) if len(upper_tri_elements) > 0 else 0.0
+        
+        net_off_efficiency = max(0.0, min(100.0, (1.0 - avg_portfolio_covariance) * 50.0))
+        
+        alpha_col1, alpha_col2 = st.columns([1.2, 0.8])
+        
+        with alpha_col1:
+            st.markdown("### 🎯 Real-Time Balanced Portfolio Matrix")
+            display_cols = ["Allocation Mode", "Investment Allocation", "Ticker Symbol", "Company Name", "Price (PKR)", "Exit Floor (PKR)", "Exit Cap (PKR)", corr_col_title]
+            
+            def highlight_portfolio_style(val):
+                if "🚀 ALPHA LONG" in str(val): return 'background-color: #1e3a8a; color: #ffffff; font-weight: bold;'
+                if "🛡️ HEDGE SHORT-NET" in str(val): return 'background-color: #b45309; color: #ffffff; font-weight: bold;'
+                return ''
+                
+            st.dataframe(
+                combined_portfolio_df[display_cols].style.map(highlight_portfolio_style, subset=["Allocation Mode"]),
+                use_container_width=True, hide_index=True
+            )
+            st.info(f"🔄 **Hedging Engine Analysis: Multi-Asset Variance Strategy achieved {net_off_efficiency:.1f}% Effective Systematic Risk Net-Off.**")
+            
+        with alpha_col2:
+            st.markdown("### 📊 Internal Portfolio Covariance Structure")
+            
+            # Re-engineered high-visibility custom mapper to avoid UI contrasts bugs completely
+            def color_cells_manually(val):
+                if val == 1.0: return 'background-color: #2d3748; font-weight: bold; color: #ffffff;'
+                elif val < 0: return 'background-color: #065f46; color: #ffffff; font-weight: bold;'
+                elif val > 0.5: return 'background-color: #991b1b; color: #ffffff; font-weight: bold;'
+                return 'background-color: #1a202c; color: #e2e8f0;'
+
+            st.dataframe(
+                sub_matrix.style.map(color_cells_manually).format(precision=2),
+                use_container_width=True
+            )
+else:
+    st.info("Insufficient synchronous pricing arrays to load structural correlation tables.")
+
 st.markdown("---")
-st.markdown("### 📊 Targeted Security Technical Analysis")
-selected_ticker = st.selectbox("Select Security:", valid_tickers)
 
-df = data_cache[selected_ticker]
-# Fix: Ensure df is defined before usage
-df['EMA_20'] = EMAIndicator(close=df['Close'], window=20).ema_indicator()
-df['EMA_50'] = EMAIndicator(close=df['Close'], window=50).ema_indicator()
+# --- SECTOR HEATMAP ENGINE ---
+st.markdown("### 🗺️ Systemic Sector Structural Trend Heatmap")
+sorted_heatmap_keys = sorted(sector_keys, key=lambda s: heatmap_stats.get(s, {}).get("volume_pkr", 0.0), reverse=True)
 
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Price'))
-fig.add_trace(go.Scatter(x=df.index, y=df['EMA_20'], name='EMA 20', line=dict(dash='dash')))
-fig.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], name='EMA 50', line=dict(dash='dash')))
-st.plotly_chart(fig, use_container_width=True)
+for row_idx in range(0, len(sorted_heatmap_keys), 4):
+    row_sectors = sorted_heatmap_keys[row_idx:row_idx + 4]
+    columns_track = st.columns(4)
+    for i, sect in enumerate(row_sectors):
+        col_slot = columns_track[i]
+        data_bundle = heatmap_stats.get(sect, {"bias": "BEARISH", "bias_score": 0.0, "cap_pct": 1.5, "volume_pkr": 0.0})
+        volume_display = f"{data_bundle['volume_pkr'] / 1e6:.1f}M" if data_bundle['volume_pkr'] < 1e9 else f"{data_bundle['volume_pkr'] / 1e9:.2f}B"
+        if data_bundle["bias"] == "BULLISH":
+            col_slot.markdown(f"""<div style="background-color:#14532d; border-left:6px solid #22c55e; padding:14px; border-radius:4px; min-height:140px; margin-bottom:20px;"><b style="color:#f0fdf4; font-size:14px;">{sect}</b><br><span style="color:#4ade80; font-size:11px; font-weight:bold;">🟢 BULLISH STRUCTURE ({data_bundle['bias_score']}%)</span><br><small style="color:#cbd5e1;">Weight: {data_bundle['cap_pct']}%<br>Vol: Rs. {volume_display}</small></div>""", unsafe_allow_html=True)
+        else:
+            col_slot.markdown(f"""<div style="background-color:#7f1d1d; border-left:6px solid #ef4444; padding:14px; border-radius:4px; min-height:140px; margin-bottom:20px;"><b style="color:#fef2f2; font-size:14px;">{sect}</b><br><span style="color:#fca5a5; font-size:11px; font-weight:bold;">🔴 RISK/CONSOLIDATION ({data_bundle['bias_score']}%)</span><br><small style="color:#cbd5e1;">Weight: {data_bundle['cap_pct']}%<br>Vol: Rs. {volume_display}</small></div>""", unsafe_allow_html=True)
+
+st.markdown("---")
+
+# --- CORE QUANT ENGINE ---
+if st.sidebar.button("Execute Quantitative Processing Engine"):
+    
+    if run_sector_analysis:
+        st.subheader(f"📊 Value-Weighted Structural Index Matrix: {selected_sector}")
+        target_tickers = list(ticker_mapping.keys())
+        matrix_dataframe_list, individual_company_records = [], []
+        weight_sum_tracker = 0.0
+        progress_bar = st.progress(0)
+        
+        for idx, ticker in enumerate(target_tickers):
+            try:
+                raw_df = fetch_live_realtime_dataframe(ticker)
+                if not raw_df.empty and len(raw_df) > 35:
+                    weight_factor = CAP_WEIGHT_UNITS.get(ticker, 10.0)
+                    normalized_indexed_series = (raw_df['Close'] / raw_df['Close'].iloc[0]) * 100
+                    matrix_dataframe_list.append((normalized_indexed_series * weight_factor).to_frame(name=ticker))
+                    weight_sum_tracker += weight_factor
+                    
+                    company_recent_window = raw_df.tail(forecast_days)
+                    company_traded_val_pkr = (company_recent_window['Close'] * company_recent_window['Volume']).sum()
+                    comp_metrics = compute_technical_metrics(raw_df)
+                    if comp_metrics is not None:
+                        latest_row = comp_metrics.iloc[-1]
+                        
+                        ema20 = latest_row['EMA_20']
+                        ema50 = latest_row['EMA_50']
+                        tracking_prob = 75.0 if ema20 > ema50 else 35.0
+                        
+                        slope_current, _ = np.polyfit(np.arange(forecast_days), comp_metrics['Close'].tail(forecast_days).values, 1)
+                        proj_display_string = f"🟢 Rs. {latest_row['Close'] + (slope_current * forecast_days):.2f}" if slope_current >= 0 else f"🔴 Rs. {latest_row['Close'] + (slope_current * forecast_days):.2f}"
+                        
+                        individual_company_records.append({
+                            "Ticker Symbol": ticker.replace(".KA",""),
+                            "Corporate Legal Name": ticker_mapping[ticker],
+                            "Last Traded Price (PKR)": round(latest_row['Close'], 2),
+                            "Momentum Index (RSI)": round(latest_row['RSI'], 2),
+                            "Trend Alignment Floor": "Above Support" if ema20 > ema50 else "Below Base",
+                            "Integrated Strategy Score": "🟢 BULLISH" if tracking_prob >= 55.0 else "🔴 BEARISH/RISK",
+                            f"{forecast_days}-Day Projected Vector Price": proj_display_string,
+                            "_sort_vol": company_traded_val_pkr
+                        })
+            except: pass
+            progress_bar.progress((idx + 1) / len(target_tickers))
+            
+        if matrix_dataframe_list and weight_sum_tracker > 0:
+            combined_weights_df = pd.concat(matrix_dataframe_list, axis=1).dropna(how='all')
+            composite_df = (combined_weights_df.sum(axis=1) / weight_sum_tracker).to_frame(name='Close')
+            composite_df['Open'] = composite_df['Close']
+            composite_df['High'] = composite_df['Close']
+            composite_df['Low'] = composite_df['Close']
+            composite_df['Volume'] = 100000
+            
+            df_index = compute_technical_metrics(composite_df)
+            if df_index is not None:
+                recent_data = df_index.tail(60)
+                slope, intercept = np.polyfit(np.arange(forecast_days), df_index['Close'].tail(forecast_days).values, 1)
+                
+                # Dynamic Anchor extraction from real-time data frame array
+                last_available_session = recent_data.index[-1]
+                last_available_close = recent_data['Close'].iloc[-1]
+                
+                # Dynamic Intercept Walk: Generate forward business days ignoring weekends entirely
+                future_dates = []
+                current_date_pointer = last_available_session
+                while len(future_dates) < forecast_days:
+                    current_date_pointer += pd.Timedelta(days=1)
+                    if current_date_pointer.weekday() < 5:  
+                        future_dates.append(current_date_pointer)
+                        
+                future_y_values = [last_available_close + (slope * (i + 1)) for i in range(forecast_days)]
+                
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['Close'], name='Sector Index Price', line=dict(color='#6366f1', width=3)))
+                fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#f59e0b', dash='dash')))
+                fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#10b981', dash='dash')))
+                
+                fig.add_trace(go.Scatter(
+                    x=[last_available_session] + list(future_dates),
+                    y=[last_available_close] + future_y_values,
+                    name=f'{forecast_days}-Day Predictive Slope Vector',
+                    line=dict(color='#06b6d4', width=2.5, dash='dot')
+                ))
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                latest_idx_row = df_index.iloc[-1]
+                action_rec = "STRONG BUY" if latest_idx_row['EMA_20'] > latest_idx_row['EMA_50'] else "LIQUIDATE / AVOID"
+                action_prob = 75.0 if latest_idx_row['EMA_20'] > latest_idx_row['EMA_50'] else 35.0
+                
+                st.markdown(f"### 🎯 Confluence Action Signals Allocation Engine")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Index Baseline", f"{latest_idx_row['Close']:.2f}")
+                col2.metric("Strategic Call", action_rec)
+                col3.metric("Probability Score", f"{action_prob}% Buy Profile")
+            
+            st.markdown("---")
+            if individual_company_records:
+                rec_df = pd.DataFrame(individual_company_records).sort_values(by="_sort_vol", ascending=False).drop(columns=["_sort_vol"])
+                proj_col_name = f"{forecast_days}-Day Projected Vector Price"
+                
+                def highlight_matrix_cells(val):
+                    if "🟢" in str(val): return 'background-color: #065f46; font-weight: bold; color: #ffffff;'
+                    if "🔴" in str(val): return 'background-color: #7f1d1d; font-weight: bold; color: #ffffff;'
+                    return ''
+                
+                st.dataframe(
+                    rec_df.style.map(highlight_matrix_cells, subset=['Integrated Strategy Score', proj_col_name]), 
+                    use_container_width=True, 
+                    hide_index=True
+                )
+                
+    # --- INDIVIDUAL COMPANY EXTRACTION PATHWAY ---
+    else:
+        target_ticker = selected_company_formatted.split(" | ")[0]
+        st.subheader(f"📊 Targeted Security Technical Analysis Matrix: {ticker_mapping[target_ticker]}")
+        
+        try:
+            df_raw = fetch_live_realtime_dataframe(target_ticker)
+            
+            if not df_raw.empty and len(df_raw) >= 50:
+                df_stock = compute_technical_metrics(df_raw)
+                if df_stock is not None:
+                    recent_data = df_stock.tail(60)
+                    slope, _ = np.polyfit(np.arange(forecast_days), df_stock['Close'].tail(forecast_days).values, 1)
+                    
+                    last_available_session = recent_data.index[-1]
+                    last_available_close = recent_data['Close'].iloc[-1]
+                    
+                    future_dates = []
+                    current_date_pointer = last_available_session
+                    while len(future_dates) < forecast_days:
+                        current_date_pointer += pd.Timedelta(days=1)
+                        if current_date_pointer.weekday() < 5:  
+                            future_dates.append(current_date_pointer)
+                            
+                    future_y_values = [last_available_close + (slope * (i + 1)) for i in range(forecast_days)]
+                    
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['Close'], name='Stock Price (PKR)', line=dict(color='#2563eb', width=3)))
+                    fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#d97706', dash='dash')))
+                    fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#059669', dash='dash')))
+                    
+                    fig.add_trace(go.Scatter(
+                        x=[last_available_session] + list(future_dates),
+                        y=[last_available_close] + future_y_values,
+                        name=f'{forecast_days}-Day Predictive Vector',
+                        line=dict(color='#0891b2', width=2.5, dash='dot')
+                    ))
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    latest_row = df_stock.iloc[-1]
+                    action_rec = "🟢 BULLISH CONTINUATION" if latest_row['EMA_20'] > latest_row['EMA_50'] else "🔴 STRUCTURAL DOWNTREND"
+                    
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Last Price", f"Rs. {latest_row['Close']:.2f}")
+                    col2.metric("RSI (14)", f"{latest_row['RSI']:.1f}")
+                    col3.metric("Systemic Bias Call", action_rec)
+            else:
+                st.error("Insufficient parallel data packet arrays available for this asset ticker symbol.")
+        except Exception as e:
+            st.error(f"Data Engine Error processing target connection frame: {str(e)}")
