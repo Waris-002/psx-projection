@@ -4,7 +4,6 @@ import pandas as pd
 import yfinance as yf
 import plotly.graph_objects as go
 from ta.momentum import RSIIndicator
-from ta.volatility import BollingerBands
 from ta.trend import EMAIndicator
 
 # --- INSTITUTIONAL STRUCTURAL DICTIONARIES & QUANT MATRICES (94 SECURITIES) ---
@@ -101,6 +100,32 @@ CAP_WEIGHT_UNITS = {
 
 TOTAL_ESTIMATED_PSX_CAP = 12500.0
 
+def fetch_live_realtime_dataframe(symbol):
+    """
+    Stitches standard historical daily data frames together with an intraday live feed
+    to eliminate the 1-day yfinance reporting delay completely.
+    """
+    ticker_obj = yf.Ticker(symbol)
+    hist_df = ticker_obj.history(period="1y", interval="1d")
+    
+    try:
+        live_today = ticker_obj.history(period="1d", interval="5m")
+        if not live_today.empty:
+            last_live_date = live_today.index[-1].floor('D')
+            if hist_df.empty or last_live_date > hist_df.index[-1].floor('D'):
+                live_row = pd.DataFrame({
+                    'Open': live_today['Open'].iloc[0],
+                    'High': live_today['High'].max(),
+                    'Low': live_today['Low'].min(),
+                    'Close': live_today['Close'].iloc[-1],
+                    'Volume': live_today['Volume'].sum()
+                }, index=[last_live_date])
+                hist_df = pd.concat([hist_df, live_row])
+                hist_df = hist_df.loc[~hist_df.index.duplicated(keep='last')]
+    except:
+        pass
+    return hist_df
+
 def compute_technical_metrics(data_frame):
     if data_frame.empty or len(data_frame) < 50:
         return None
@@ -110,8 +135,8 @@ def compute_technical_metrics(data_frame):
     df_clean['RSI'] = RSIIndicator(close=df_clean['Close'], window=14).rsi()
     return df_clean
 
-st.set_page_config(page_title="PSX Capital Analytics Command Suite", layout="wide")
-st.title("🏛️ PSX Capital Analytics Command Suite")
+st.set_page_config(page_title="PSX Real-Time Analytics Command Suite", layout="wide")
+st.title("🏛️ PSX Real-Time Analytics Command Suite")
 
 # --- SIDEBAR CONTROLS ---
 st.sidebar.header("🕹️ Quantitative Controls")
@@ -129,8 +154,8 @@ else:
 
 forecast_days = st.sidebar.slider("Interactive Plot Display Forecast Path (Days):", min_value=5, max_value=30, value=15)
 
-# --- GLOBAL ENGINE DATA PRE-CALCULATION WITH RETURNS SERIES ---
-@st.cache_data(ttl=120)
+# --- GLOBAL ENGINE DATA PRE-CALCULATION WITH REAL-TIME FEED ---
+@st.cache_data(ttl=30)
 def compute_complete_market_matrix(days_span):
     diagnostics = {}
     all_companies_flat_list = []
@@ -145,8 +170,7 @@ def compute_complete_market_matrix(days_span):
         for ticker in companies.keys():
             sector_cap_accumulator += CAP_WEIGHT_UNITS.get(ticker, 5.0)
             try:
-                t_obj = yf.Ticker(ticker)
-                hist = t_obj.history(period="1y") 
+                hist = fetch_live_realtime_dataframe(ticker)
                 if not hist.empty and len(hist) >= 60:
                     recent_window = hist.tail(days_span)
                     traded_value_pkr = (recent_window['Close'] * recent_window['Volume']).sum()
@@ -200,11 +224,11 @@ def compute_complete_market_matrix(days_span):
         }
     return diagnostics, all_companies_flat_list, pd.DataFrame(returns_master_dict)
 
-with st.spinner("Processing structural trend tracking matrix..."):
+with St.spinner("Syncing global real-time market matrices..."):
     heatmap_stats, complete_companies_pool, master_returns_df = compute_complete_market_matrix(forecast_days)
 
 # --- CROSS-ASSET PORTFOLIO VARIANCE HEDGE ENGINE ---
-st.markdown("## ⚡ Cross-Asset Portfolio Variance Engine (Dynamic Net-Off)")
+St.markdown("## ⚡ Cross-Asset Portfolio Variance Engine (Dynamic Live Net-Off)")
 
 pool_df = pd.DataFrame(complete_companies_pool)
 
@@ -256,39 +280,36 @@ if not pool_df.empty and not master_returns_df.empty:
         alpha_col1, alpha_col2 = st.columns([1.2, 0.8])
         
         with alpha_col1:
-            st.markdown("### 🎯 Automatically Constructed Balanced Portfolio Matrix")
+            st.markdown("### 🎯 Real-Time Balanced Portfolio Matrix")
             display_cols = ["Allocation Mode", "Investment Allocation", "Ticker Symbol", "Company Name", "Price (PKR)", "Exit Floor (PKR)", "Exit Cap (PKR)", corr_col_title]
             
             def highlight_portfolio_style(val):
-                if "🚀 ALPHA LONG" in str(val): return 'background-color: #e8f4fd; color: #004085; font-weight: bold;'
-                if "🛡️ HEDGE SHORT-NET" in str(val): return 'background-color: #fef9e7; color: #856404; font-weight: bold;'
+                if "🚀 ALPHA LONG" in str(val): return 'background-color: #1e3a8a; color: #ffffff; font-weight: bold;'
+                if "🛡️ HEDGE SHORT-NET" in str(val): return 'background-color: #b45309; color: #ffffff; font-weight: bold;'
                 return ''
                 
             st.dataframe(
                 combined_portfolio_df[display_cols].style.map(highlight_portfolio_style, subset=["Allocation Mode"]),
                 use_container_width=True, hide_index=True
             )
-            
             st.info(f"🔄 **Hedging Engine Analysis: Multi-Asset Variance Strategy achieved {net_off_efficiency:.1f}% Effective Systematic Risk Net-Off.**")
             
         with alpha_col2:
-            st.markdown("### 📊 Internal Portfolio Covariance Structure Matrix")
+            st.markdown("### 📊 Internal Portfolio Covariance Structure")
             
-            # Replaced background_gradient tool to avoid uninstalled matplotlib dependency errors entirely
+            # Re-engineered high-visibility custom mapper to avoid UI contrasts bugs completely
             def color_cells_manually(val):
-                if val == 1.0: return 'background-color: #fce4d6; font-weight: bold; color: #000000;'
-                elif val < 0: return 'background-color: #e2efda; color: #375623; font-weight: bold;'
-                elif val > 0.5: return 'background-color: #fff2cc; color: #7f6000;'
-                return 'color: #000000;'
+                if val == 1.0: return 'background-color: #2d3748; font-weight: bold; color: #ffffff;'
+                elif val < 0: return 'background-color: #065f46; color: #ffffff; font-weight: bold;'
+                elif val > 0.5: return 'background-color: #991b1b; color: #ffffff; font-weight: bold;'
+                return 'background-color: #1a202c; color: #e2e8f0;'
 
             st.dataframe(
                 sub_matrix.style.map(color_cells_manually).format(precision=2),
                 use_container_width=True
             )
-    else:
-        st.info("System currently processing sector configurations...")
 else:
-    st.info("Insufficient parallel pricing history to run global correlation analysis.")
+    st.info("Insufficient synchronous pricing arrays to load structural correlation tables.")
 
 st.markdown("---")
 
@@ -301,12 +322,12 @@ for row_idx in range(0, len(sorted_heatmap_keys), 4):
     columns_track = st.columns(4)
     for i, sect in enumerate(row_sectors):
         col_slot = columns_track[i]
-        data_bundle = heatmap_stats.get(sect, {"bias": "BEARISH", "cap_pct": 1.5, "volume_pkr": 0.0})
+        data_bundle = heatmap_stats.get(sect, {"bias": "BEARISH", "bias_score": 0.0, "cap_pct": 1.5, "volume_pkr": 0.0})
         volume_display = f"{data_bundle['volume_pkr'] / 1e6:.1f}M" if data_bundle['volume_pkr'] < 1e9 else f"{data_bundle['volume_pkr'] / 1e9:.2f}B"
         if data_bundle["bias"] == "BULLISH":
-            col_slot.markdown(f"""<div style="background-color:#d4edda; border-left:6px solid #28a745; padding:14px; border-radius:4px; min-height:140px; margin-bottom:20px;"><b style="color:#155724; font-size:14px;">{sect}</b><br><span style="color:#28a745; font-size:11px; font-weight:bold;">🟢 BULLISH STRUCTURE</span><br><small style="color:#555;">Weight: {data_bundle['cap_pct']}%<br>Vol: Rs. {volume_display}</small></div>""", unsafe_allow_html=True)
+            col_slot.markdown(f"""<div style="background-color:#14532d; border-left:6px solid #22c55e; padding:14px; border-radius:4px; min-height:140px; margin-bottom:20px;"><b style="color:#f0fdf4; font-size:14px;">{sect}</b><br><span style="color:#4ade80; font-size:11px; font-weight:bold;">🟢 BULLISH STRUCTURE ({data_bundle['bias_score']}%)</span><br><small style="color:#cbd5e1;">Weight: {data_bundle['cap_pct']}%<br>Vol: Rs. {volume_display}</small></div>""", unsafe_allow_html=True)
         else:
-            col_slot.markdown(f"""<div style="background-color:#f8d7da; border-left:6px solid #dc3545; padding:14px; border-radius:4px; min-height:140px; margin-bottom:20px;"><b style="color:#721c24; font-size:14px;">{sect}</b><br><span style="color:#dc3545; font-size:11px; font-weight:bold;">🔴 RISK/CONSOLIDATION</span><br><small style="color:#555;">Weight: {data_bundle['cap_pct']}%<br>Vol: Rs. {volume_display}</small></div>""", unsafe_allow_html=True)
+            col_slot.markdown(f"""<div style="background-color:#7f1d1d; border-left:6px solid #ef4444; padding:14px; border-radius:4px; min-height:140px; margin-bottom:20px;"><b style="color:#fef2f2; font-size:14px;">{sect}</b><br><span style="color:#fca5a5; font-size:11px; font-weight:bold;">🔴 RISK/CONSOLIDATION ({data_bundle['bias_score']}%)</span><br><small style="color:#cbd5e1;">Weight: {data_bundle['cap_pct']}%<br>Vol: Rs. {volume_display}</small></div>""", unsafe_allow_html=True)
 
 st.markdown("---")
 
@@ -322,8 +343,7 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
         
         for idx, ticker in enumerate(target_tickers):
             try:
-                t_obj = yf.Ticker(ticker)
-                raw_df = t_obj.history(period="1y")
+                raw_df = fetch_live_realtime_dataframe(ticker)
                 if not raw_df.empty and len(raw_df) > 35:
                     weight_factor = CAP_WEIGHT_UNITS.get(ticker, 10.0)
                     normalized_indexed_series = (raw_df['Close'] / raw_df['Close'].iloc[0]) * 100
@@ -369,7 +389,7 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                 recent_data = df_index.tail(60)
                 slope, intercept = np.polyfit(np.arange(forecast_days), df_index['Close'].tail(forecast_days).values, 1)
                 
-                # --- DYNAMIC HISTORICAL DATA PACKET ANCHOR (COMPOSITE) ---
+                # Dynamic Anchor extraction from real-time data frame array
                 last_available_session = recent_data.index[-1]
                 last_available_close = recent_data['Close'].iloc[-1]
                 
@@ -378,22 +398,21 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                 current_date_pointer = last_available_session
                 while len(future_dates) < forecast_days:
                     current_date_pointer += pd.Timedelta(days=1)
-                    if current_date_pointer.weekday() < 5:  # Natively strips out Saturdays & Sundays
+                    if current_date_pointer.weekday() < 5:  
                         future_dates.append(current_date_pointer)
                         
                 future_y_values = [last_available_close + (slope * (i + 1)) for i in range(forecast_days)]
                 
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['Close'], name='Sector Index Price', line=dict(color='#4b0082', width=3)))
-                fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#ff7f0e', dash='dash')))
-                fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#2ca02c', dash='dash')))
+                fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['Close'], name='Sector Index Price', line=dict(color='#6366f1', width=3)))
+                fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#f59e0b', dash='dash')))
+                fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#10b981', dash='dash')))
                 
-                # Seamless vector stitch: Index [0] is explicitly the last active candle day inside the data packet
                 fig.add_trace(go.Scatter(
                     x=[last_available_session] + list(future_dates),
                     y=[last_available_close] + future_y_values,
                     name=f'{forecast_days}-Day Predictive Slope Vector',
-                    line=dict(color='#00bfff', width=2.5, dash='dot')
+                    line=dict(color='#06b6d4', width=2.5, dash='dot')
                 ))
                 
                 st.plotly_chart(fig, use_container_width=True)
@@ -414,7 +433,8 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                 proj_col_name = f"{forecast_days}-Day Projected Vector Price"
                 
                 def highlight_matrix_cells(val):
-                    if "🟢" in str(val): return 'background-color: #d4edda; font-weight: bold; color: #155724;'
+                    if "🟢" in str(val): return 'background-color: #065f46; font-weight: bold; color: #ffffff;'
+                    if "🔴" in str(val): return 'background-color: #7f1d1d; font-weight: bold; color: #ffffff;'
                     return ''
                 
                 st.dataframe(
@@ -429,8 +449,7 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
         st.subheader(f"📊 Targeted Security Technical Analysis Matrix: {ticker_mapping[target_ticker]}")
         
         try:
-            t_obj = yf.Ticker(target_ticker)
-            df_raw = t_obj.history(period="1y")
+            df_raw = fetch_live_realtime_dataframe(target_ticker)
             
             if not df_raw.empty and len(df_raw) >= 50:
                 df_stock = compute_technical_metrics(df_raw)
@@ -438,31 +457,28 @@ if st.sidebar.button("Execute Quantitative Processing Engine"):
                     recent_data = df_stock.tail(60)
                     slope, _ = np.polyfit(np.arange(forecast_days), df_stock['Close'].tail(forecast_days).values, 1)
                     
-                    # --- DYNAMIC HISTORICAL DATA PACKET ANCHOR (INDIVIDUAL TICKER) ---
                     last_available_session = recent_data.index[-1]
                     last_available_close = recent_data['Close'].iloc[-1]
                     
-                    # Dynamic Intercept Walk: Generate forward business days ignoring weekends entirely
                     future_dates = []
                     current_date_pointer = last_available_session
                     while len(future_dates) < forecast_days:
                         current_date_pointer += pd.Timedelta(days=1)
-                        if current_date_pointer.weekday() < 5:  # Natively strips out Saturdays & Sundays
+                        if current_date_pointer.weekday() < 5:  
                             future_dates.append(current_date_pointer)
                             
                     future_y_values = [last_available_close + (slope * (i + 1)) for i in range(forecast_days)]
                     
                     fig = go.Figure()
-                    fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['Close'], name='Stock Price (PKR)', line=dict(color='#004085', width=3)))
-                    fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#ff7f0e', dash='dash')))
-                    fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#2ca02c', dash='dash')))
+                    fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['Close'], name='Stock Price (PKR)', line=dict(color='#2563eb', width=3)))
+                    fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_20'], name='EMA 20 Support', line=dict(color='#d97706', dash='dash')))
+                    fig.add_trace(go.Scatter(x=recent_data.index, y=recent_data['EMA_50'], name='EMA 50 Baseline', line=dict(color='#059669', dash='dash')))
                     
-                    # Seamless vector stitch: Index [0] matches the hard line terminal coordinates, completely removing structural timeline disconnects
                     fig.add_trace(go.Scatter(
                         x=[last_available_session] + list(future_dates),
                         y=[last_available_close] + future_y_values,
                         name=f'{forecast_days}-Day Predictive Vector',
-                        line=dict(color='#00bfff', width=2.5, dash='dot')
+                        line=dict(color='#0891b2', width=2.5, dash='dot')
                     ))
                     
                     st.plotly_chart(fig, use_container_width=True)
