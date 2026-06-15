@@ -5,7 +5,7 @@ import yfinance as yf
 import plotly.graph_objects as go
 from ta.momentum import RSIIndicator
 from ta.volatility import BollingerBands
-from ta.trend import EMAIndicator, MACD
+from ta.trend import EMAIndicator
 
 # --- INSTITUTIONAL STRUCTURAL DICTIONARIES & QUANT MATRICES (94 SECURITIES) ---
 SECURITY_DICTIONARY = {
@@ -99,6 +99,8 @@ CAP_WEIGHT_UNITS = {
     "COLG.KA": 180.0, "ICI.KA": 120.0, "EPCL.KA": 45.0, "LOTCHEM.KA": 32.0, "GGL.KA": 7.0, "GHGL.KA": 14.0, "DOL.KA": 6.0, "NICL.KA": 24.0
 }
 
+TOTAL_ESTIMATED_PSX_CAP = 12500.0
+
 def compute_technical_metrics(df):
     if df.empty or len(df) < 50:
         return None
@@ -158,9 +160,8 @@ def compute_complete_market_matrix(days_span):
                     if comp_metrics is not None:
                         latest_row = comp_metrics.iloc[-1]
                         
-                        # Simulating strategy score tracking
-                        ema20 = comp_metrics['EMA_20'].iloc[-1]
-                        ema50 = comp_metrics['EMA_50'].iloc[-1]
+                        ema20 = latest_row['EMA_20']
+                        ema50 = latest_row['EMA_50']
                         tracking_prob = 75.0 if ema20 > ema50 else 35.0
                         
                         slope_current, _ = np.polyfit(np.arange(days_span), comp_metrics['Close'].tail(days_span).values, 1)
@@ -226,24 +227,18 @@ with alpha_col1:
 with alpha_col2:
     st.markdown("### 🎯 Top 5 Negatively Correlated Strategic Picks")
     if not pool_df.empty and not master_returns_df.empty:
-        # Get the highest performing bullish company as anchor
         filtered_pool = pool_df[pool_df['Sector'].isin(top_3_sectors)].sort_values(by="Score Value", ascending=False)
         
         if len(filtered_pool) > 0:
             anchor_ticker = filtered_pool.iloc[0]["Ticker Symbol"]
-            
-            # Calculate correlation matrix vs the anchor security
             corr_matrix = master_returns_df.corr()
             
             if anchor_ticker in corr_matrix.columns:
                 anchor_correlations = corr_matrix[anchor_ticker].dropna()
                 
-                # Dynamic compilation to find assets closest to -1 correlation relative to our anchor
                 top_hedged_records = []
-                # Include anchor first
                 top_hedged_records.append(filtered_pool.iloc[0])
                 
-                # Fetch remaining 4 assets that minimize correlation with anchor
                 sorted_by_hedge = anchor_correlations.sort_values(ascending=True)
                 added_tickers = {anchor_ticker}
                 
@@ -253,7 +248,6 @@ with alpha_col2:
                     if tik in added_tickers:
                         continue
                     
-                    # Match ticker back to pool stats
                     match_row = pool_df[pool_df["Ticker Symbol"] == tik]
                     if not match_row.empty:
                         top_hedged_records.append(match_row.iloc[0])
@@ -261,15 +255,14 @@ with alpha_col2:
             
                 display_hedge_df = pd.DataFrame(top_hedged_records).copy()
                 
-                # Map true tracked correlation coefficient arrays
                 coefficients = [round(anchor_correlations.get(t, 1.0), 2) for t in display_hedge_df["Ticker Symbol"]]
-                display_hedge_df[f"Correlation vs {anchor_ticker}"] = coefficients
+                corr_col_name = f"Correlation vs {anchor_ticker}"
+                display_hedge_df[corr_col_name] = coefficients
                 
-                # Calculate Net-off exposure metric
                 avg_negative_corr = np.mean([c for c in coefficients if c < 0]) if any(c < 0 for c in coefficients) else 0.0
                 effective_hedging = abs(avg_negative_corr) * 100 if avg_negative_corr < 0 else 12.5
                 
-                final_cols = ["Ticker Symbol", "Company Name", "Sector", "Price (PKR)", f"Correlation vs {anchor_ticker}", "Integrated Score"]
+                final_cols = ["Ticker Symbol", "Company Name", "Sector", "Price (PKR)", corr_col_name, "Integrated Score"]
                 
                 def highlight_hedge_cells(val):
                     try:
@@ -308,3 +301,92 @@ for row_idx in range(0, len(sorted_heatmap_keys), 4):
             col_slot.markdown(f"""<div style="background-color:#d4edda; border-left:6px solid #28a745; padding:14px; border-radius:4px; min-height:140px; margin-bottom:20px;"><b style="color:#155724; font-size:14px;">{sect}</b><br><span style="color:#28a745; font-size:11px; font-weight:bold;">🟢 BULLISH STRUCTURE</span><br><small style="color:#555;">Weight: {data_bundle['cap_pct']}%<br>Vol: Rs. {volume_display}</small></div>""", unsafe_allow_html=True)
         else:
             col_slot.markdown(f"""<div style="background-color:#f8d7da; border-left:6px solid #dc3545; padding:14px; border-radius:4px; min-height:140px; margin-bottom:20px;"><b style="color:#721c24; font-size:14px;">{sect}</b><br><span style="color:#dc3545; font-size:11px; font-weight:bold;">🔴 RISK/CONSOLIDATION</span><br><small style="color:#555;">Weight: {data_bundle['cap_pct']}%<br>Vol: Rs. {volume_display}</small></div>""", unsafe_allow_html=True)
+
+st.markdown("---")
+
+# --- CORE QUANT ENGINE ---
+if st.sidebar.button("Execute Quantitative Processing Engine"):
+    if run_sector_analysis:
+        st.subheader(f"📊 Value-Weighted Structural Index Matrix: {selected_sector}")
+        target_tickers = list(ticker_mapping.keys())
+        matrix_dataframe_list, individual_company_records = [], []
+        weight_sum_tracker = 0.0
+        progress_bar = st.progress(0)
+        
+        for idx, ticker in enumerate(target_tickers):
+            try:
+                t_obj = yf.Ticker(ticker)
+                raw_df = t_obj.history(period="1y")
+                if not raw_df.empty and len(raw_df) > 35:
+                    weight_factor = CAP_WEIGHT_UNITS.get(ticker, 10.0)
+                    normalized_indexed_series = (raw_df['Close'] / raw_df['Close'].iloc[0]) * 100
+                    matrix_dataframe_list.append((normalized_indexed_series * weight_factor).to_frame(name=ticker))
+                    weight_sum_tracker += weight_factor
+                    
+                    company_recent_window = raw_df.tail(forecast_days)
+                    company_traded_val_pkr = (company_recent_window['Close'] * company_recent_window['Volume']).sum()
+                    comp_metrics = compute_technical_metrics(raw_df)
+                    if comp_metrics is not None:
+                        latest_row = comp_metrics.iloc[-1]
+                        
+                        ema20 = latest_row['EMA_20']
+                        ema50 = latest_row['EMA_50']
+                        tracking_prob = 75.0 if ema20 > ema50 else 35.0
+                        
+                        slope_current, _ = np.polyfit(np.arange(forecast_days), comp_metrics['Close'].tail(forecast_days).values, 1)
+                        proj_display_string = f"🟢 Rs. {latest_row['Close'] + (slope_current * forecast_days):.2f}" if slope_current >= 0 else f"🔴 Rs. {latest_row['Close'] + (slope_current * forecast_days):.2f}"
+                        
+                        individual_company_records.append({
+                            "Ticker Symbol": ticker.replace(".KA",""),
+                            "Corporate Legal Name": ticker_mapping[ticker],
+                            "Last Traded Price (PKR)": round(latest_row['Close'], 2),
+                            "Momentum Index (RSI)": round(latest_row['RSI'], 2),
+                            "Trend Alignment Floor": "Above Support" if ema20 > ema50 else "Below Base",
+                            "Integrated Strategy Score": "🟢 BULLISH" if tracking_prob >= 55.0 else "🔴 BEARISH/RISK",
+                            f"{forecast_days}-Day Projected Vector Price": proj_display_string,
+                            "_sort_vol": company_traded_val_pkr
+                        })
+            except: pass
+            progress_bar.progress((idx + 1) / len(target_tickers))
+            
+        if matrix_dataframe_list and weight_sum_tracker > 0:
+            combined_weights_df = pd.concat(matrix_dataframe_list, axis=1).dropna(how='all')
+            composite_df = (combined_weights_df.sum(axis=1) / weight_sum_tracker).to_frame(name='Close')
+            composite_df['Open'] = composite_df['Close']
+            composite_df['High'] = composite_df['Close']
+            composite_df['Low'] = composite_df['Close']
+            composite_df['Volume'] = 100000
+            
+            df = compute_technical_metrics(composite_df)
+            if df is not None:
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=df.tail(60).index, y=df.tail(60)['Close'], name='Sector Index Price', line=dict(color='#4b0082', width=3)))
+                fig.add_trace(go.Scatter(x=df.tail(60).index, y=df.tail(60)['EMA_20'], name='EMA 20 Support', line=dict(color='#ff7f0e', dash='dash')))
+                fig.add_trace(go.Scatter(x=df.tail(60).index, y=df.tail(60)['EMA_50'], name='EMA 50 Baseline', line=dict(color='#2ca02c', dash='dash')))
+                st.plotly_chart(fig, use_container_width=True)
+                
+                latest_idx_row = df.iloc[-1]
+                action_rec = "STRONG BUY" if latest_idx_row['EMA_20'] > latest_idx_row['EMA_50'] else "LIQUIDATE / AVOID"
+                action_prob = 75.0 if latest_idx_row['EMA_20'] > latest_idx_row['EMA_50'] else 35.0
+                
+                st.markdown(f"### 🎯 Confluence Action Signals Allocation Engine")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Index Baseline", f"{latest_idx_row['Close']:.2f}")
+                col2.metric("Strategic Call", action_rec)
+                col3.metric("Probability Score", f"{action_prob}% Buy Profile")
+            
+            st.markdown("---")
+            if individual_company_records:
+                rec_df = pd.DataFrame(individual_company_records).sort_values(by="_sort_vol", ascending=False).drop(columns=["_sort_vol"])
+                
+                proj_col_name = f"{forecast_days}-Day Projected Vector Price"
+                
+                def highlight_matrix_cells(val):
+                    if "🟢" in str(val): return 'background-color: #d4edda; font-weight: bold; color: #155724;'
+                    return ''
+                
+                st.dataframe(
+                    rec_df.style.map(highlight_matrix_cells, subset=['Integrated Strategy Score', proj_col_name]), 
+                    use_container_width=True, 
+                    hide_index=True
+                )
