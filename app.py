@@ -204,16 +204,12 @@ st.markdown("## ⚡ Cross-Asset Portfolio Variance Engine (Dynamic Net-Off)")
 pool_df = pd.DataFrame(complete_companies_pool)
 
 if not pool_df.empty and not master_returns_df.empty:
-    # 1. Gather the Alpha Gainers across the ENTIRE market pool
     top_gainers_pool = pool_df[pool_df["Integrated Score"] == "🟢 BULLISH"].sort_values(by="Score Value", ascending=False).head(3)
     
     if len(top_gainers_pool) >= 3:
         gainer_tickers = top_gainers_pool["Ticker Symbol"].tolist()
-        
-        # 2. Calculate global correlation matrix over the return series
         global_corr_matrix = master_returns_df.corr()
         
-        # 3. Find the top 3 structural decliners/decoupled counters with the lowest cumulative correlation to our alphas
         avg_market_correlations = global_corr_matrix[gainer_tickers].mean(axis=1).dropna()
         sorted_hedges = avg_market_correlations.sort_values(ascending=True)
         
@@ -232,25 +228,21 @@ if not pool_df.empty and not master_returns_df.empty:
                 
         top_hedges_pool = pd.DataFrame(hedge_records)
         
-        # 4. Synthesize Portfolio Build
         top_gainers_pool["Allocation Mode"] = "🚀 ALPHA LONG"
         top_hedges_pool["Allocation Mode"] = "🛡️ HEDGE SHORT-NET"
         
         combined_portfolio_df = pd.concat([top_gainers_pool, top_hedges_pool]).copy()
         portfolio_tickers = combined_portfolio_df["Ticker Symbol"].tolist()
         
-        # 5. Map the precise correlation versus the portfolio's leading alpha asset
         lead_alpha = gainer_tickers[0]
         coefficients = [round(global_corr_matrix[lead_alpha].get(t, 1.0), 2) for t in portfolio_tickers]
         corr_col_title = f"Correlation vs {lead_alpha}"
         combined_portfolio_df[corr_col_title] = coefficients
         
-        # 6. Compute True Portfolio Net-Off Variance Efficiency
         sub_matrix = global_corr_matrix[portfolio_tickers].loc[portfolio_tickers]
         upper_tri_elements = sub_matrix.values[np.triu_indices_from(sub_matrix, k=1)]
         avg_portfolio_covariance = np.mean(upper_tri_elements) if len(upper_tri_elements) > 0 else 0.0
         
-        # Scaling metric showing risk elimination status
         net_off_efficiency = max(0.0, min(100.0, (1.0 - avg_portfolio_covariance) * 50.0))
         
         alpha_col1, alpha_col2 = st.columns([1, 1])
@@ -276,8 +268,19 @@ if not pool_df.empty and not master_returns_df.empty:
             
         with alpha_col2:
             st.markdown("### 📊 Internal Portfolio Covariance Structure Matrix")
+            
+            # Pure CSS Heatmap Engine avoiding external library requirements
+            def style_covariance_matrix(val):
+                try:
+                    v = float(val)
+                    if v >= 0.70: return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
+                    elif 0.30 <= v < 0.70: return 'background-color: #fff3cd; color: #856404;'
+                    elif -0.10 < v < 0.30: return 'background-color: #f8f9fa; color: #212529;'
+                    else: return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                except ValueError: return ''
+
             st.dataframe(
-                sub_matrix.style.background_gradient(cmap="RdYlGn_r", axis=None).format(precision=2),
+                sub_matrix.style.map(style_covariance_matrix).format(precision=2),
                 use_container_width=True
             )
     else:
