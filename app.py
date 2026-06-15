@@ -68,7 +68,7 @@ SECURITY_DICTIONARY = {
     },
     "Power Generation & Distribution": {
         "HUBC.KA": "The Hub Power Company Limited", "KEL.KA": "K-Electric Limited",
-        "KAPCO.KA": "Kot Adda Power Company Limited", "NPL.KA": "Nishat Power Limited",
+        "KAPCO.KA": "Kot Addu Power Company Limited", "NPL.KA": "Nishat Power Limited",
         "NCPL.KA": "Nishat Chunian Power Limited", "LPL.KA": "Lalpir Power Limited",
         "PKGP.KA": "Pakgen Power Limited", "SPWL.KA": "Saif Power Limited"
     },
@@ -168,8 +168,9 @@ def compute_complete_market_matrix(days_span):
                         target_price_projection = latest_row['Close'] + (slope_current * days_span)
                         proj_display_string = f"🟢 Rs. {target_price_projection:.2f}" if slope_current >= 0 else f"🔴 Rs. {target_price_projection:.2f}"
                         
-                        # Generate stop loss logic floor base
+                        # --- ADDED LOGIC CORE: ASSIGN SYSTEMIC FLOORS & CEILINGS ---
                         stop_loss_val = ema50 if ema20 > ema50 else (latest_row['Close'] * 0.93)
+                        exit_cap_val = target_price_projection if slope_current > 0 else (latest_row['Close'] * 1.12)
                         
                         all_companies_flat_list.append({
                             "Ticker Symbol": symbol_short,
@@ -180,6 +181,7 @@ def compute_complete_market_matrix(days_span):
                             "Integrated Score": "🟢 BULLISH" if tracking_prob >= 55.0 else "🔴 BEARISH/RISK",
                             f"{days_span}-Day Projection": proj_display_string,
                             "Exit Floor (PKR)": round(stop_loss_val, 2),
+                            "Exit Cap (PKR)": round(exit_cap_val, 2),
                             "_volume_raw": traded_value_pkr
                         })
                         if ema20 > ema50: bullish_count += 1
@@ -235,8 +237,6 @@ if not pool_df.empty and not master_returns_df.empty:
         top_gainers_pool["Allocation Mode"] = "🚀 ALPHA LONG"
         top_hedges_pool["Allocation Mode"] = "🛡️ HEDGE SHORT-NET"
         
-        # --- NEW INLINE MATRIX MATH: COMPUTE CAPITAL PERCENTAGES ---
-        # Alpha longs get 60% weight split equally (20% each), hedges split 40% equally (13.33% each)
         top_gainers_pool["Investment Allocation"] = "20.0%"
         top_hedges_pool["Investment Allocation"] = "13.3%"
         
@@ -254,11 +254,12 @@ if not pool_df.empty and not master_returns_df.empty:
         
         net_off_efficiency = max(0.0, min(100.0, (1.0 - avg_portfolio_covariance) * 50.0))
         
-        alpha_col1, alpha_col2 = st.columns([1.1, 0.9])
+        alpha_col1, alpha_col2 = st.columns([1.2, 0.8])
         
         with alpha_col1:
             st.markdown("### 🎯 Automatically Constructed Balanced Portfolio Matrix")
-            display_cols = ["Allocation Mode", "Investment Allocation", "Ticker Symbol", "Company Name", "Price (PKR)", "Exit Floor (PKR)", corr_col_title]
+            # DISPLAY UPDATE: Included 'Exit Cap (PKR)' in the interface pool
+            display_cols = ["Allocation Mode", "Investment Allocation", "Ticker Symbol", "Company Name", "Price (PKR)", "Exit Floor (PKR)", "Exit Cap (PKR)", corr_col_title]
             
             def highlight_portfolio_style(val):
                 if "🚀 ALPHA LONG" in str(val): return 'background-color: #e8f4fd; color: #004085; font-weight: bold;'
